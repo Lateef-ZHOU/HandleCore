@@ -27,6 +27,22 @@ if(HANDLECORE_WITH_SERIAL)
     target_link_libraries(HandleSerial INTERFACE Lidar::HandleCore libserialport::libserialport)
 endif()
 
+option(HANDLECORE_WITH_PCAP "Build the Ethernet ARP/UDP Pcap module and its tests" OFF)
+if(HANDLECORE_WITH_PCAP)
+    include(cmake/PcapDependency.cmake)
+    add_library(HandlePcap INTERFACE)
+    add_library(Lidar::Pcap ALIAS HandlePcap)
+    target_sources(HandlePcap INTERFACE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/PcapHandle.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/PcapProtocol.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/PcapInterfaces.h")
+    target_link_libraries(HandlePcap INTERFACE Lidar::HandleCore HandlePcapDependency)
+    if(WIN32)
+        target_link_libraries(HandlePcap INTERFACE iphlpapi)
+        target_compile_definitions(HandlePcap INTERFACE NOMINMAX)
+    endif()
+endif()
+
 if(PROJECT_IS_TOP_LEVEL)
     include(CTest)
     if(BUILD_TESTING)
