@@ -1,12 +1,12 @@
 # HandleCore
 
-独立的 C++20 / Qt Core 通信基类库。首版从 LiDAR_DataACQ 提交 `8f792a8d976089e3eba8edd7ae0fbedbf32e72f6` 的 `include/Device/Base/HandleBase.h` 原样迁入，构建与测试一并迁移。此处是基类的唯一维护源；具体传输子类目前仍留在应用仓库。
+独立的 C++20 / Qt Core 通信基类库。首版从 LiDAR_DataACQ 提交 `8f792a8d976089e3eba8edd7ae0fbedbf32e72f6` 的 `include/Device/Base/HandleBase.h` 原样迁入，构建与测试一并迁移。此处维护通信基类及通用串口层；Pelco-D 和其他具体协议、设备业务仍在应用仓库。
 
-Handle 按通信方式和协议复用，不按 Windows 设备或 Linux 设备划分。Linux 桥接器和 Windows 官邸均可直接使用同一具体 Handle；串口、UDP、激光器、温控或相机传输只有实际操作系统 API 差异才需要适配。设备业务配置恢复由子类或上层负责，不进入基类。本次未迁移或重新设计子类，尚未验证 ARM 和实物设备。
+Handle 按通信方式和协议复用，不按 Windows 设备或 Linux 设备划分。Linux 桥接器和 Windows 官邸均可直接使用同一具体 Handle；串口、UDP、激光器、温控或相机传输只有实际操作系统 API 差异才需要适配。设备业务配置恢复由子类或上层负责，不进入基类。通用串口已迁入；ARM 和实物设备尚未验证。
 
 ## 依赖与使用
 
-- CMake 3.28 或以上、C++20、Qt Core；不依赖 QML、Gui、Quick、Qt Test、Npcap、libserialport 或本项目 Device/Collector。
+- CMake 3.28 或以上、C++20、Qt Core；核心目标不依赖 QML、Gui、Quick、Qt Test、Npcap、libserialport 或应用 Device/Collector。可选串口目标额外依赖 libserialport。
 - `HandleCore` 是头文件目标，别名为 `Lidar::HandleCore`；使用方通过 FetchContent 固定本库的完整提交号，或 `add_subdirectory(<本库目录>)`，并链接该目标，即取得头文件路径、C++20 要求和 Qt Core 链接依赖。
 - 独立调用方包含 `<HandleBase.h>`。基类的 `RxTime` 直接别名到 `std::chrono::system_clock::time_point`；应用自己的 `RxTime.h` 仍负责 Qt 元类型及 QML 登记，二者没有类型包装或转换。
 - 需要 Qt 信号的具体类型使用 `Q_OBJECT` / `Q_SIGNALS` 并启用 AUTOMOC；模板基类只声明纯虚通知函数，不依赖 QML，也不替具体类登记信号。
@@ -23,7 +23,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 Makefiles 等单配置生成器在配置时加 `-DCMAKE_BUILD_TYPE=Release`。Windows 测试会为子进程补齐所选 Qt Core DLL 的目录；不需要 GUI 平台插件。`BUILD_TESTING=OFF` 可仅配置接口目标，不构建测试。
 
-独立入口只编译基类及 `tests/`。作为其他项目的子目录时不添加本库测试、不修改使用方的测试开关。主程序通过相同目标引用基类，仍保留自身原有的界面及传输依赖。
+独立入口编译所选功能的 `tests/`。作为其他项目的子目录时不添加本库测试、不修改使用方的测试开关。主程序通过相同目标引用基类，仍保留自身原有的界面及传输依赖。
 
 ## 当前接口契约
 
@@ -53,3 +53,26 @@ Makefiles 等单配置生成器在配置时加 `-DCMAKE_BUILD_TYPE=Release`。Wi
 - Windows x64：MSVC 19.51、Qt 6.11.2，Release /W4 /WX 构建无诊断，CTest 5/5（7.87 秒）。
 - Linux x86_64：GCC 16.2.1、Qt 6.12.0、Unix Makefiles，Release 严格警告构建通过，CTest 5/5（5.45 秒）；运行依赖中的 Qt 模块仅 Qt Core。
 - 覆盖受控收发、重连和线程退出，不代表 ARM、实际串口、网卡或 USB 设备已经验证。
+
+## 通用串口（2026-10-24）
+
+启用 `HANDLECORE_WITH_SERIAL=ON` 后提供 `Lidar::Serial`，包含 `<SerialHandle.h>` / `<SerialPort.h>`，传递核心目标及 libserialport 链接依赖。默认关闭串口，保留 Core 独立构建。先查找 libserialport 的 CMake Config 包，没有时使用 pkg-config 的 libserialport >= 0.1.1；不自动下载或安装依赖。
+
+```text
+cmake -S . -B build-serial -DHANDLECORE_WITH_SERIAL=ON -DCMAKE_PREFIX_PATH="<Qt 前缀>;<libserialport 前缀>"
+cmake --build build-serial --config Release --parallel 4
+ctest --test-dir build-serial -C Release --output-on-failure
+```
+
+Linux 使用单配置生成器时加 `-DCMAKE_BUILD_TYPE=Release`；自建 libserialport 可通过 `PKG_CONFIG_PATH=<前缀>/lib/pkgconfig` 查找。
+
+- `SerialHandle<Framer>` 实现四个连接接口；`onRX/onTX` 仍纯虚，具体协议必须重写。连接及日志通知同样由具体末端提供 Qt 信号，末端析构首先 stop。
+- `Framer` 是可默认构造的值对象，实现 `feed(const QByteArray &, RxTime, const DataCallback &)`。只在收包线程访问，随连接创建和销毁；一次读取同步交出 0..N 帧，之后每帧单独进入原有 RX 裁决。不得保存 deliver 或输入视图，不引入跨线程解析队列。
+- 协议成帧器在消费项目定义。库不包含 Pelco-D、设备地址、命令或校验规则；Windows 官邸和 Linux 桥接器可使用同一协议 Handle。
+- `SerialParams` 接收端口名/路径、正整数波特率、数据位、停止位、校验、流控及正的写超时。常用波特率枚举是 UI 选项，不限制连接值；默认 9600/8N1、无流控、500 ms。驱动不支持的设置使打开失败。0 写超时被拒绝，避免在本接口中变成无限等待。
+- 收块上限 256 字节、读取超时 100 ms 保持；RxTime 在读取返回后取得，是软件观测值。写口按连接互斥，允许收包线程 Reject 回包与所属线程主动发送，读取独立。短写/失败返 false，不整条自动重发；完整写入不代表远端设备执行成功。
+- 首次失败、每秒重连、促断标志及 stop/wait 继续由原有机制负责；HandleBase.h 未修改。资源及成帧器随连接释放，不增加析构状态或第二条关闭链。
+
+新增 `serial_probe` 用真实 libserialport 头文件和测试链接替身覆盖生产连接代码、两种协议纯虚约束、多帧/半帧、参数、短写与失败、并发命令/Reject、重连丢弃旧尾部、回调期间停止和半开资源释放。`serial_link_probe` 真正链接安装的库并枚举端口，不打开硬件。
+
+本轮 Windows/MSVC/Qt 6.11.2 构建零诊断，CTest 7/7（9.12 秒）；Linux x86_64/GCC/Qt 6.12.0 构建零诊断，CTest 7/7（6.74 秒）。Linux 的 libserialport 0.1.2 从官方源码单独构建至用户缓存前缀，不改系统软件包；第三方构建有其版本宏重定义警告，消费本库的严格警告构建通过。实物拔插、ARM 驱动与设备动作不在受控测试覆盖范围内。
