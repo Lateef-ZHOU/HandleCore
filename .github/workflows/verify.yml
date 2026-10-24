@@ -1,0 +1,100 @@
+name: Verify modules
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      windows_full:
+        description: 'Run all modules on the prepared Windows/Npcap runner'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    name: '${{ matrix.os }} / ${{ matrix.profile }}'
+    runs-on: '${{ matrix.os }}'
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+        profile: [core, sim-gimbal, sim-card]
+        include:
+          - os: ubuntu-24.04
+            profile: serial
+          - os: ubuntu-24.04
+            profile: pcap
+          - os: ubuntu-24.04
+            profile: all
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install selected Linux dependencies
+        if: runner.os == 'Linux' && (matrix.profile == 'serial' || matrix.profile == 'pcap' || matrix.profile == 'all')
+        shell: bash
+        env:
+          PROFILE: '${{ matrix.profile }}'
+        run: |
+          packages=(pkg-config)
+          if [[ "$PROFILE" == serial || "$PROFILE" == all ]]; then packages+=(libserialport-dev); fi
+          if [[ "$PROFILE" == pcap || "$PROFILE" == all ]]; then packages+=(libpcap-dev); fi
+          sudo apt-get update
+          sudo apt-get install -y "${packages[@]}"
+      - name: Install supported Qt baseline
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125
+        with:
+          version: '6.8.3'
+          archives: "${{ runner.os == 'Linux' && 'qtbase icu' || 'qtbase' }}"
+          cache: true
+      - name: Configure, build and test
+        shell: pwsh
+        env:
+          PROFILE: '${{ matrix.profile }}'
+        run: |
+          cmake "-DPROFILES=$env:PROFILE" "-DPREFIX_PATH=$env:QT_ROOT_DIR" -P ci/verify.cmake
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: '${{ matrix.os }}-${{ matrix.profile }}'
+          path: |
+            build-ci/**/configure.log
+            build-ci/**/build.log
+            build-ci/**/test.log
+            build-ci/**/junit.xml
+            build-ci/**/CMakeFiles/CMakeConfigureLog.yaml
+            build-ci/**/reject-*.log
+
+  windows-full:
+    # 不把外部 PR 送进自托管机器；发布前再决定是否登记 runner / 启用自动 push 验证。
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.windows_full) ||
+      (github.event_name == 'push' && vars.HANDLECORE_WINDOWS_FULL == 'true')
+    runs-on: [self-hosted, Windows, X64, handlecore-pcap]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Verify prepared dependencies and all module selections
+        shell: pwsh
+        run: |
+          if (-not $env:HANDLECORE_CI_PREFIX_PATH) {
+            throw 'Runner must set HANDLECORE_CI_PREFIX_PATH to Qt, libserialport and Npcap SDK prefixes.'
+          }
+          cmake "-DPREFIX_PATH=$env:HANDLECORE_CI_PREFIX_PATH" -P ci/verify.cmake
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-full
+          path: |
+            build-ci/**/configure.log
+            build-ci/**/build.log
+            build-ci/**/test.log
+            build-ci/**/junit.xml
+            build-ci/**/CMakeFiles/CMakeConfigureLog.yaml
+            build-ci/**/reject-*.log
