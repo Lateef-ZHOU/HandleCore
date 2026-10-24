@@ -4,6 +4,8 @@ C++20 / Qt Core 通信与仿真执行库，供 Windows 和 Linux 的应用层共
 
 本库是头文件目标，不生成额外 DLL，不依赖 QML、Qt Gui、Quick 或 Qt Test。串口、Pcap、虚拟云台、虚拟采集执行器均为可选模块，**默认全部关闭**。
 
+自有代码采用 [MIT 许可证](LICENSE)，版权署名为周涛（ZHOU TAO）。第三方依赖保持各自许可证，使用与分发边界见 [第三方依赖说明](THIRD_PARTY_NOTICES.md)。
+
 ## 模块和依赖
 
 共同要求：**CMake >= 3.28、C++20、Qt Core >= 6.8.3**。6.8.3 是当前维护和验证的支持下限，不表示已经逐一验证更早 Qt 版本。目标平台为 Windows/MSVC、Linux/GCC；ARM 与实物设备仍需对应环境验证。
@@ -84,4 +86,6 @@ GitHub 托管 Windows 验证 Core 与两个仿真模块，托管 Linux 覆盖全
 
 ## 发布状态
 
-目前处于发布前整理阶段：**未创建远端、未推送，仓库可见性与许可证待确定**。Qt、libserialport、libpcap/Npcap 由使用环境提供，各自许可单独适用；仓库不附带它们的 SDK、运行库或驱动。
+目前处于发布前整理阶段：**MIT 已确定，未创建远端、未推送，仓库可见性待确定**。Qt、libserialport、libpcap/Npcap 由使用环境提供，仓库不附带它们的 SDK、运行库或驱动。
+
+MIT 不代替依赖授权。随产品分发 Qt/libserialport 时须落实 LGPL 或相应授权要求；Linux libpcap 保留 BSD 声明；Windows Npcap 免费许可限制安装数量和再分发，未获授权时由用户从官方自行安装。完整边界见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
