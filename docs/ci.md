@@ -1,6 +1,6 @@
 # CI 与本地复现
 
-工作流 `.github/workflows/verify.yml` 在未来仓库的 push / pull_request / workflow_dispatch 时运行。当前未创建远端，尚未有 GitHub 托管运行记录。
+工作流 `.github/workflows/verify.yml` 在公开仓库的 push / pull_request / workflow_dispatch 时运行。各提交的状态和日志见 [GitHub Actions](https://github.com/Lateef-ZHOU/HandleCore/actions/workflows/verify.yml)；以下本地验证记录不代替远端运行结果。
 
 ## 覆盖与环境
 

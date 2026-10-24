@@ -70,7 +70,7 @@ jobs:
             build-ci/**/reject-*.log
 
   windows-full:
-    # 不把外部 PR 送进自托管机器；发布前再决定是否登记 runner / 启用自动 push 验证。
+    # 不把外部 PR 送进自托管机器；仅在准备好专用环境后显式启用。
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.windows_full) ||
       (github.event_name == 'push' && vars.HANDLECORE_WINDOWS_FULL == 'true')

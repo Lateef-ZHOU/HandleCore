@@ -48,7 +48,7 @@ Linux 也可用 `PKG_CONFIG_PATH` 指向自建依赖。Windows Pcap 将 Npcap SD
 include(FetchContent)
 set(HANDLECORE_WITH_SIM_CARD ON)
 FetchContent_Declare(handlecore
-    GIT_REPOSITORY "<HandleCore Git 仓库路径或 URL>"
+    GIT_REPOSITORY "https://github.com/Lateef-ZHOU/HandleCore.git"
     GIT_TAG        "<已验证的完整提交 SHA>"
 )
 FetchContent_MakeAvailable(handlecore)
@@ -57,7 +57,7 @@ target_link_libraries(my_app PRIVATE Lidar::SimCard)
 set_target_properties(my_app PROPERTIES AUTOMOC ON)
 ```
 
-当前只有本地 Git 仓库，尚未创建远端。发布后只需替换仓库地址，仍固定完整 SHA，不跟随分支头；不与 `GIT_SHALLOW` 混用。拥有源码目录的调用方也可 `add_subdirectory`。
+公开源码位于 [Lateef-ZHOU/HandleCore](https://github.com/Lateef-ZHOU/HandleCore)。将示例中的 GIT_TAG 替换为已验证的完整提交 SHA，不跟随分支头，也不与 `GIT_SHALLOW` 混用。首次配置需要 Git 和访问 GitHub 的网络；拥有源码目录的调用方也可 `add_subdirectory`。
 
 模板型 Handle 的具体末端负责 `Q_OBJECT`、Qt 通知及析构首句 `stop()`；直接使用具体 Pcap/虚拟云台类型也需启用 AUTOMOC，目标已提供相应信号头。应用无需包含旧项目的 Device、Collector 或模型。
 
@@ -82,10 +82,10 @@ cmake "-DPROFILES=core;sim-gimbal;sim-card" "-DPREFIX_PATH=<Qt 前缀>" -P ci/ve
 
 提供 `core / serial / pcap / sim-gimbal / sim-card / all` 六种配置，每种使用独立构建目录。省略 PROFILES 时全部执行，需要准备全部依赖；可用 `BUILD_ROOT` 指定输出目录。
 
-GitHub 托管 Windows 验证 Core 与两个仿真模块，托管 Linux 覆盖全部单模块和组合；预装依赖的 Windows runner 验证全部六种配置。后者默认不派发，通过手动输入或仓库变量启用，不在工作流里静默安装 Npcap。详见 [CI 与本地复现](docs/ci.md)。没有远端时，工作流文件不会运行；本地双平台结果不能写成 GitHub 已通过。
+GitHub 托管 Windows 验证 Core 与两个仿真模块，托管 Linux 覆盖全部单模块和组合；预装依赖的 Windows runner 验证全部六种配置。后者默认不派发，通过手动输入或仓库变量启用，不在工作流里静默安装 Npcap。详见 [CI 与本地复现](docs/ci.md)，各提交的实际结果以 [Actions 记录](https://github.com/Lateef-ZHOU/HandleCore/actions/workflows/verify.yml) 为准；跳过不等于验证通过。
 
 ## 发布状态
 
-目前处于发布前整理阶段：**MIT 已确定，未创建远端、未推送，仓库可见性待确定**。Qt、libserialport、libpcap/Npcap 由使用环境提供，仓库不附带它们的 SDK、运行库或驱动。
+本库以 **MIT 许可证公开发布源码**。Qt、libserialport、libpcap/Npcap 由使用环境提供，仓库不附带它们的 SDK、运行库或驱动。
 
 MIT 不代替依赖授权。随产品分发 Qt/libserialport 时须落实 LGPL 或相应授权要求；Linux libpcap 保留 BSD 声明；Windows Npcap 免费许可限制安装数量和再分发，未获授权时由用户从官方自行安装。完整边界见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
