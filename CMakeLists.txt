@@ -54,6 +54,16 @@ if(HANDLECORE_WITH_SIM_GIMBAL)
     target_link_libraries(HandleSimGimbal INTERFACE Lidar::HandleCore)
 endif()
 
+option(HANDLECORE_WITH_SIM_CARD "Build the typed simulated acquisition executor and its tests" OFF)
+if(HANDLECORE_WITH_SIM_CARD)
+    add_library(HandleSimCard INTERFACE)
+    add_library(Lidar::SimCard ALIAS HandleSimCard)
+    target_sources(HandleSimCard INTERFACE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/SimCardHandle.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/SimCardProtocol.h")
+    target_link_libraries(HandleSimCard INTERFACE Lidar::HandleCore)
+endif()
+
 if(PROJECT_IS_TOP_LEVEL)
     include(CTest)
     if(BUILD_TESTING)
