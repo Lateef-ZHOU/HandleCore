@@ -43,6 +43,17 @@ if(HANDLECORE_WITH_PCAP)
     endif()
 endif()
 
+option(HANDLECORE_WITH_SIM_GIMBAL "Build the Qt Core simulated two-axis gimbal module and its tests" OFF)
+if(HANDLECORE_WITH_SIM_GIMBAL)
+    add_library(HandleSimGimbal INTERFACE)
+    add_library(Lidar::SimGimbal ALIAS HandleSimGimbal)
+    target_sources(HandleSimGimbal INTERFACE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/SimGimbalHandle.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/SimGimbalProtocol.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/GimbalMotion.h")
+    target_link_libraries(HandleSimGimbal INTERFACE Lidar::HandleCore)
+endif()
+
 if(PROJECT_IS_TOP_LEVEL)
     include(CTest)
     if(BUILD_TESTING)

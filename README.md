@@ -1,6 +1,6 @@
 # HandleCore
 
-独立的 C++20 / Qt Core 通信库。首版从 LiDAR_DataACQ 提交 `8f792a8d976089e3eba8edd7ae0fbedbf32e72f6` 的 `include/Device/Base/HandleBase.h` 原样迁入，构建与测试一并迁移。此处维护通信基类、通用串口及可选以太网 ARP/UDP 模块；Pelco-D 和设备业务仍在应用仓库。
+独立的 C++20 / Qt Core 通信库。首版从 LiDAR_DataACQ 提交 `8f792a8d976089e3eba8edd7ae0fbedbf32e72f6` 的 `include/Device/Base/HandleBase.h` 原样迁入，构建与测试一并迁移。此处维护通信基类、通用串口、可选以太网 ARP/UDP 及虚拟云台模块；Pelco-D 和设备业务仍在应用仓库。
 
 Handle 按通信方式和协议复用，不按 Windows 设备或 Linux 设备划分。Linux 桥接器和 Windows 官邸均可直接使用同一具体 Handle；串口、UDP、激光器、温控或相机传输只有实际操作系统 API 差异才需要适配。设备业务配置恢复由子类或上层负责，不进入基类。通用串口已迁入；ARM 和实物设备尚未验证。
 
@@ -98,3 +98,26 @@ Linux 使用 `-DCMAKE_BUILD_TYPE=Release`，通过 pkg-config 强制 `libpcap>=1
 验证：Windows x64 / MSVC / Qt 6.11.2 / Npcap 1.86（libpcap 1.10.6）与 Linux x86_64 / GCC 16.2.1 / Qt 6.12.0 / libpcap 1.11.0 均严格警告构建零诊断，完整 CTest **9/9** 通过。`pcap_probe` 使用 C API 链接替身驱动生产 Handle，验证主线程发送、ARP 学习与最新报文补发、旧回包跨停止/重连/析构的丢弃、RxTime、截断包、发送失败、半开资源释放及等待在途回调；`pcap_link_probe` 真正链接系统库，枚举网卡并离线编译/执行 BPF，不打开或发送到实物网卡。三个新增公共头分别独立编译。
 
 Linux 另以 libpcap 1.9.1 的 pkg-config 元数据确认配置拒绝，关闭模块后 Core 独立构建和 5/5 测试通过；Pcap 探针运行时只依赖 Qt Core，不引入 QML/Gui。以上不是 ARM、实物断连重连或单句柄驱动并发实测。
+
+## 可选虚拟云台模块（2026-10-24）
+
+`HANDLECORE_WITH_SIM_GIMBAL=ON` 提供 `Lidar::SimGimbal`，仅传递 Qt Core 与 C++20。调用方启用 AUTOMOC，包含 `<SimGimbalHandle.h>`；仅组包时可包含 `<SimGimbalProtocol.h>`。两个头及 `<GimbalMotion.h>` 均可独立编译，运动模型本身只依赖标准库。串口、Pcap、QML、Gui、设备与 Collector 均不是模块依赖。
+
+```text
+cmake -S . -B build-sim-gimbal -DHANDLECORE_WITH_SIM_GIMBAL=ON -DCMAKE_PREFIX_PATH="<Qt 前缀>"
+cmake --build build-sim-gimbal --config Release --parallel 4
+ctest --test-dir build-sim-gimbal -C Release --output-on-failure
+```
+
+Linux 单配置生成器加 `-DCMAKE_BUILD_TYPE=Release`。其他可选模块可独立开关，不启用时不增加依赖。
+
+- `SimGimbalParams` 接收有限初始角度、有限且非负的两轴限速，以及 1..INT_MAX 毫秒的回报周期。`start` 保留基类的异步接受语义，连接线程打开时检查参数，非法值记录原因并按首次连接失败路径退出；不改 HandleBase 的裁决、重连或关闭机制。
+- `SimGimbalWire::Command` 提供 GoTo / Stop / SetSpeed。send 同步检查大小、指令类型与本指令使用的字段；拒绝非有限目标、负数或非有限速度，返回 false 且不排队。无关字段不参与校验。成功表示已排队，不表示电机已到达。协议编解码模板只接受 Command / Report。
+- `GimbalMotion::Pose` 是两轴角度值，不含应用的 PanTiltModel 或世界坐标知识。模型归一化为 pan [0,360)、tilt [-180,180)，沿最短圆周路径运动；正负半圈均选正向。两轴按各自限速与真实流逝时间推进、到位不过冲，零限速保持该轴位置，Stop 清空目标，调速不重置位置。模型直接使用者若传入非有限角度、非法限速或负数/非有限时间步，则抛出 std::invalid_argument，不修改已有状态。
+- 型号行程、速度上限/步距、UI 初值及安装坐标转换归应用。限速初值不参与连接参数相等比较，运行调速不触发重连。连接对象、QTimer、运动状态均只在工作线程访问；命令和退出经原有队列提交，回报仍同步进入数据回调，RxTime 仍为 system_clock 值。具体析构首先同步 stop，等待回调退出。
+- 线格式保留本机 POD 原样复制（含本机布局、对齐、字节序），只供同一进程的调用方与 Handle 使用。两端分别编译可用不等于跨平台网络序列化，不直接把此报文用作 Windows/Linux 间的 UDP 协议。
+- SimCardHandle、风场/谱生成、QML 历史读取、Collector、设备业务仍由消费应用维护，本模块不增加通用仿真调度层。
+
+验证：Windows x64 / MSVC 19.51 / Qt 6.11.2，Release /W4 /WX 零编译警告，CTest 7/7（8.05 秒）；Linux x86_64 / GCC 16.2.1 / Qt 6.12.0，严格警告构建通过，CTest 7/7（5.68 秒）。新增检查包含标准库独立运动测试、跨角度窗/半圈/零速度/停机/改目标、非法模型与连接/命令参数、回报线程与时刻、同参调速不重连、重新连接、在途回调析构等待及 40 次打开期间停止。该模块没有硬件依赖；ARM 尚未验证。
+
+同时开启串口、Pcap、虚拟云台的组合验证：Windows CTest 11/11（9.55 秒）、Linux 11/11（8.06 秒），严格警告构建均无诊断；Linux 关闭全部模块后 Core 5/5（5.56 秒）。ldd 确认虚拟云台探针的 Qt 模块仅 Core，独立运动探针没有 Qt 依赖。
