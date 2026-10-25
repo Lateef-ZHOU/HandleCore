@@ -2,6 +2,7 @@
 #include <chrono>
 #include <limits>
 #include <memory>
+#include <utility>
 #include <QByteArray>
 #include <QEventLoop>
 #include <QMetaObject>
@@ -69,7 +70,7 @@ private:
     [[nodiscard]] bool connLoop(std::shared_ptr<SimGimbalConn> conn, Sink sink) override
     {
         conn->last = std::chrono::steady_clock::now();
-        QObject::connect(&conn->timer, &QTimer::timeout, conn.get(), [weak = std::weak_ptr(conn), sink] {
+        QObject::connect(&conn->timer, &QTimer::timeout, conn.get(), [weak = std::weak_ptr(conn), sink = std::move(sink)] {
             const auto c = weak.lock();
             if (!c)
                 return;

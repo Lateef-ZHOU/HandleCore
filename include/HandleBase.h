@@ -165,7 +165,7 @@ private:
                     connectionChanged(true);
                     Q_EMIT logMessage("设备连接成功");
                 }
-                const bool clean = connLoop(h, dispatch_);
+                const bool clean = connLoop(h, makeDispatch(this));
                 h.reset();
 
                 if (clean)
@@ -200,21 +200,8 @@ private:
     [[nodiscard]] virtual RXRuling onRX(const QByteArray &raw, RxTime at, std::shared_ptr<ConnT> conn) = 0;
     [[nodiscard]] virtual TXRuling onTX(const QByteArray &payload, std::shared_ptr<ConnT> conn) const = 0;
 
-    const Sink dispatch_ = [this](std::shared_ptr<ConnT> conn, const QByteArray &raw, const RxTime at)
-    {
-        const RXRuling r = onRX(raw, at, conn);
-        switch (r.act)
-        {
-        case RXRuling::Decode:
-            onData_(r.payload, r.at);
-            break;
-        case RXRuling::Reject:
-            (void)connSend(conn, r.payload);
-            break;
-        case RXRuling::Drop:
-            break;
-        }
-    };
+    // 每轮收包生成派发回调，由 connLoop 接收；本层不保存固定闭包副本。
+    [[nodiscard]] static Sink makeDispatch(Handle *self);
 
     const DataCallback onData_;
 
@@ -224,6 +211,26 @@ private:
     // 观察口不持有资源；收包和发送在使用期间各自持有连接份额。
     std::atomic<std::weak_ptr<ConnT>> conn_;
 };
+
+template <HandleParameters ParamT, typename ConnT>
+typename Handle<ParamT, ConnT>::Sink Handle<ParamT, ConnT>::makeDispatch(Handle<ParamT, ConnT> *self)
+{
+    return [self](std::shared_ptr<ConnT> conn, const QByteArray &raw, const RxTime at)
+    {
+        const RXRuling r = self->onRX(raw, at, conn);
+        switch (r.act)
+        {
+        case RXRuling::Decode:
+            self->onData_(r.payload, r.at);
+            break;
+        case RXRuling::Reject:
+            (void)self->connSend(conn, r.payload);
+            break;
+        case RXRuling::Drop:
+            break;
+        }
+    };
+}
 
 // 检查公开继承关系，不约束 Qt 元对象登记方式。
 template <typename H>

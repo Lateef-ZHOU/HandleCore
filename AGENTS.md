@@ -6,6 +6,7 @@
 - 不加 friend、假想需求抽象、额外关闭链或析构状态。RxTime 直接 using 标准库类型；QML 登记归使用方。
 - 重连、同步关闭、裁决接口的调整需要用户明确授权。当前同步回调必须在依赖资源清理前退出。
 - 使用 Q_EMIT / Q_SIGNALS / Q_SLOTS。模板基类不增加 Q_OBJECT，具体通知由子类提供。
+- 固定派发回调用私有静态工厂现场构造，类内声明、类外定义，不另存仅用于复制给下游的成员副本。接收方持有回调，单次交接可 move；外部 onData、连接快照与工作线程 deliver 等具有实际寿命职责的成员保留。
 - 修改后独立构建并跑 CTest；跨平台声明至少分别记录 Windows/MSVC 与 Linux/GCC 的结果，未测 ARM 或硬件不得声称已通过。
 - 被其他项目通过 FetchContent 消费时保持测试关闭，仅由顶层独立构建开启测试。不得反向依赖应用头文件。
 - 公开发布（2026-10-24 用户定）：远端为 https://github.com/Lateef-ZHOU/HandleCore，公开源码，消费项目仍固定完整提交号。后续推送仍需用户指示。模块默认全部关闭，由各构建入口选择；公共版本声明不得暗开 Serial。支持基线 Qt Core 6.8.3 / CMake 3.28 / C++20，Serial 实际头文件至少 0.1.1，Pcap 至少 libpcap 1.10.0。本地与 CI 共用 `ci/verify.cmake`，六组配置各用独立构建目录；托管 Windows 不安装 Npcap，完整 Windows 验证使用预置环境。README 是接入入口，详细契约及迁移记录见 docs/reference.md，验证范围及远端结果入口见 docs/ci.md。
