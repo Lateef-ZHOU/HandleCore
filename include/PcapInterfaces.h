@@ -71,6 +71,6 @@ struct NetworkInterfaceInfo
             break;
         }
     }
-#endif
     return result;
+#endif
 }

@@ -2,7 +2,7 @@
 
 C++20 / Qt Core 通信与仿真执行库，供 Windows 和 Linux 的应用层共用。提供同步收发回调、连接重试及同步关闭机制，具体设备业务留在调用方。
 
-本库是头文件目标，不生成额外 DLL，不依赖 QML、Qt Gui、Quick 或 Qt Test。串口、Pcap、虚拟云台、虚拟采集执行器均为可选模块，**默认全部关闭**。
+基类、Serial 与 SimCard 为头文件目标；Pcap 与 SimGimbal 为静态目标，在库内唯一生成 Qt 信号实现，多个消费库可一起链接。不生成额外 DLL，不依赖 QML、Qt Gui、Quick 或 Qt Test。串口、Pcap、虚拟云台、虚拟采集执行器均为可选模块，**默认全部关闭**。
 
 自有代码采用 [MIT 许可证](LICENSE)，版权署名为周涛（ZHOU TAO）。第三方依赖保持各自许可证，使用与分发边界见 [第三方依赖说明](THIRD_PARTY_NOTICES.md)。
 
@@ -59,7 +59,7 @@ set_target_properties(my_app PROPERTIES AUTOMOC ON)
 
 公开源码位于 [Lateef-ZHOU/HandleCore](https://github.com/Lateef-ZHOU/HandleCore)。将示例中的 GIT_TAG 替换为已验证的完整提交 SHA，不跟随分支头，也不与 `GIT_SHALLOW` 混用。首次配置需要 Git 和访问 GitHub 的网络；拥有源码目录的调用方也可 `add_subdirectory`。
 
-模板型 Handle 的具体末端负责 `Q_OBJECT`、Qt 通知及析构首句 `stop()`；直接使用具体 Pcap/虚拟云台类型也需启用 AUTOMOC，目标已提供相应信号头。应用无需包含旧项目的 Device、Collector 或模型。
+模板型 Handle 的具体末端负责 `Q_OBJECT`、Qt 通知及析构首句 `stop()`；具体 Pcap/虚拟云台类型的 AUTOMOC 由本库负责，不再向消费者传播信号头作为编译源。应用无需包含旧项目的 Device、Collector 或模型。
 
 ## 使用边界
 

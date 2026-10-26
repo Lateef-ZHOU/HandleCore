@@ -1,5 +1,5 @@
 # 某些 Config 包仅导出目标，没有 ConfigVersion 文件；两种入口均检查实际头文件。
-find_package(libserialport CONFIG QUIET)
+find_package(libserialport CONFIG QUIET GLOBAL)
 if(NOT TARGET libserialport::libserialport)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(HANDLECORE_LIBSERIALPORT REQUIRED IMPORTED_TARGET GLOBAL libserialport>=0.1.1)

@@ -85,6 +85,25 @@ if(HANDLECORE_WITH_SIM_CARD)
 endif()
 
 add_test(NAME handle_core COMMAND handle_core_probe)
+
+# 多个拥有 QObject 的消费库同时链接，Handle 的信号实现只能由其模块编译一次。
+if(HANDLECORE_WITH_PCAP OR HANDLECORE_WITH_SIM_GIMBAL)
+    foreach(consumer First Second)
+        add_library(${consumer}Consumer STATIC composition/${consumer}.h)
+        set_target_properties(${consumer}Consumer PROPERTIES AUTOMOC ON)
+        if(HANDLECORE_WITH_PCAP)
+            target_link_libraries(${consumer}Consumer PUBLIC Lidar::Pcap)
+        endif()
+        if(HANDLECORE_WITH_SIM_GIMBAL)
+            target_link_libraries(${consumer}Consumer PUBLIC Lidar::SimGimbal)
+        endif()
+    endforeach()
+    add_executable(multi_consumer_probe composition/probe.cpp)
+    target_link_libraries(multi_consumer_probe PRIVATE FirstConsumer SecondConsumer)
+    add_test(NAME multi_consumer COMMAND multi_consumer_probe)
+    set_tests_properties(multi_consumer PROPERTIES TIMEOUT 30
+        ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>")
+endif()
 set_tests_properties(handle_core PROPERTIES TIMEOUT 30)
 if(WIN32)
     set_tests_properties(handle_core PROPERTIES

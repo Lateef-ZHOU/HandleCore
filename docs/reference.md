@@ -90,7 +90,7 @@ Linux 使用单配置生成器时加 `-DCMAKE_BUILD_TYPE=Release`；自建 libse
 
 ## 可选 Pcap 模块（2026-10-24）
 
-`HANDLECORE_WITH_PCAP=ON` 提供头文件目标 `Lidar::Pcap`。`PcapHandle.h` 管理单个 pcap_t、连接参数快照、ARP 学习及 UDP 收发；`PcapProtocol.h` 提供 Ethernet/ARP/IPv4/UDP 字节值对象和 BPF 谓词；`PcapInterfaces.h` 枚举实际 pcap 接口及 MAC。调用方启用 AUTOMOC 并链接目标，目标自带具体 Handle 的 Qt 信号头。不依赖 Qt Gui/QML，不包含表单下标、默认值或设备型号。
+`HANDLECORE_WITH_PCAP=ON` 提供静态目标 `Lidar::Pcap`。`PcapHandle.h` 管理单个 pcap_t、连接参数快照、ARP 学习及 UDP 收发；`PcapProtocol.h` 提供 Ethernet/ARP/IPv4/UDP 字节值对象和 BPF 谓词；`PcapInterfaces.h` 枚举实际 pcap 接口及 MAC。调用方链接目标；具体 Handle 的 Qt 信号实现只在库内编译一次，不向多个消费目标重复生成。不依赖 Qt Gui/QML，不包含表单下标、默认值或设备型号。
 
 ```text
 cmake -S . -B build-pcap -DHANDLECORE_WITH_PCAP=ON -DCMAKE_PREFIX_PATH="<Qt 前缀>;<Npcap SDK 前缀>"
@@ -112,7 +112,7 @@ Linux 另以 libpcap 1.9.1 的 pkg-config 元数据确认配置拒绝，关闭�
 
 ## 可选虚拟云台模块（2026-10-24）
 
-`HANDLECORE_WITH_SIM_GIMBAL=ON` 提供 `Lidar::SimGimbal`，仅传递 Qt Core 与 C++20。调用方启用 AUTOMOC，包含 `<SimGimbalHandle.h>`；仅组包时可包含 `<SimGimbalProtocol.h>`。两个头及 `<GimbalMotion.h>` 均可独立编译，运动模型本身只依赖标准库。串口、Pcap、QML、Gui、设备与 Collector 均不是模块依赖。
+`HANDLECORE_WITH_SIM_GIMBAL=ON` 提供 `Lidar::SimGimbal`，静态目标仅依赖 Qt Core 与 C++20，库内完成 AUTOMOC。调用方包含 `<SimGimbalHandle.h>`；仅组包时可包含 `<SimGimbalProtocol.h>`。两个头及 `<GimbalMotion.h>` 均可独立编译，运动模型本身只依赖标准库。串口、Pcap、QML、Gui、设备与 Collector 均不是模块依赖。
 
 ```text
 cmake -S . -B build-sim-gimbal -DHANDLECORE_WITH_SIM_GIMBAL=ON -DCMAKE_PREFIX_PATH="<Qt 前缀>"
@@ -152,3 +152,7 @@ Linux 单配置生成器加 `-DCMAKE_BUILD_TYPE=Release`。调用方以 `SimCard
 - 同步关闭先撤 timer/pending，再向原连接队列投递退出并等待工作线程；排队闭包不强持连接、不借新连接。HandleBase 的首连失败、重连、RX/TX 与关闭机制未改。`SimCardWire::Command` 保留原生 POD 布局和 Accumulate/Stop，编解码仅接受 Command 和结果头的 quint64 请求号；它是进程内部协议，不作为跨 ABI 网络协议。
 
 验证：单独 Core + SimCard 在 Windows / MSVC 19.51 / Qt 6.11.2 上 6/6（15.01 秒），Linux x86_64 / GCC 16.2.1 / Qt 6.12.0 上 6/6（15.71 秒）；同时启用四个可选模块后 Windows 12/12（17.08 秒）、Linux 12/12（15.18 秒），严格警告构建通过。探针使用未登记元类型的不可复制输入及不可复制合成器，覆盖固定窗口、线程归属、状态延续、空数据、请求替换、旧 Stop、重连、在途析构等待与 40 次立即关闭。Linux ldd 的 Qt 依赖仅 Core。两端另对应用合成器与迁移前实现比较 81 组完整输出字节，全部一致；不代表 ARM 验证。
+
+## 多官邸共同链接
+
+Pcap/SimGimbal 的 QObject 元对象实现归各自静态目标；模块保持默认关闭。Serial 的 Config 导入目标设为 GLOBAL，与 pkg-config 路径一致，允许同一构建的兄弟消费目标使用。运行实现未改，重连和同步关闭契约保持。`multi_consumer` 验证两个独立 QObject 消费库同时链接时没有重复元对象定义。

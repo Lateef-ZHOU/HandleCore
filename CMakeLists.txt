@@ -26,28 +26,36 @@ endif()
 option(HANDLECORE_WITH_PCAP "Build the Ethernet ARP/UDP Pcap module and its tests" OFF)
 if(HANDLECORE_WITH_PCAP)
     include(cmake/PcapDependency.cmake)
-    add_library(HandlePcap INTERFACE)
+    add_library(HandlePcap STATIC)
+    set_target_properties(HandlePcap PROPERTIES AUTOMOC ON)
+    if(MSVC)
+        target_compile_options(HandlePcap PRIVATE /W4)
+    endif()
     add_library(Lidar::Pcap ALIAS HandlePcap)
-    target_sources(HandlePcap INTERFACE
+    target_sources(HandlePcap PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/include/PcapHandle.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/PcapProtocol.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/PcapInterfaces.h")
-    target_link_libraries(HandlePcap INTERFACE Lidar::HandleCore HandlePcapDependency)
+    target_link_libraries(HandlePcap PUBLIC Lidar::HandleCore HandlePcapDependency)
     if(WIN32)
-        target_link_libraries(HandlePcap INTERFACE iphlpapi)
-        target_compile_definitions(HandlePcap INTERFACE NOMINMAX)
+        target_link_libraries(HandlePcap PUBLIC iphlpapi)
+        target_compile_definitions(HandlePcap PUBLIC NOMINMAX)
     endif()
 endif()
 
 option(HANDLECORE_WITH_SIM_GIMBAL "Build the Qt Core simulated two-axis gimbal module and its tests" OFF)
 if(HANDLECORE_WITH_SIM_GIMBAL)
-    add_library(HandleSimGimbal INTERFACE)
+    add_library(HandleSimGimbal STATIC)
+    set_target_properties(HandleSimGimbal PROPERTIES AUTOMOC ON)
+    if(MSVC)
+        target_compile_options(HandleSimGimbal PRIVATE /W4)
+    endif()
     add_library(Lidar::SimGimbal ALIAS HandleSimGimbal)
-    target_sources(HandleSimGimbal INTERFACE
+    target_sources(HandleSimGimbal PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/include/SimGimbalHandle.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/SimGimbalProtocol.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/GimbalMotion.h")
-    target_link_libraries(HandleSimGimbal INTERFACE Lidar::HandleCore)
+    target_link_libraries(HandleSimGimbal PUBLIC Lidar::HandleCore)
 endif()
 
 option(HANDLECORE_WITH_SIM_CARD "Build the typed simulated acquisition executor and its tests" OFF)
