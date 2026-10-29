@@ -239,6 +239,34 @@ void reconnectAndInitialFailure()
             "reconnect notifications or cleanup changed");
 }
 
+void synchronousDisconnect()
+{
+    auto state = std::make_shared<State>();
+    CoreHandle handle(state, [](const QByteArray &, RxTime) {});
+    QObject receiver;
+    int disconnected = 0;
+    QObject::connect(&handle, &CoreHandle::connectionChanged, &receiver, [&](bool open) {
+        if (open) return;
+        require(QThread::currentThread() == handle.thread(), "disconnect was queued from worker");
+        require(state->breaking.available() == 0 && handle.isOpen(), "disconnect arrived after break/release");
+        require(handle.send("off"), "disconnect receiver cannot send final command");
+        ++disconnected;
+    });
+    require(handle.start({state}), "disconnect probe start rejected");
+    acquire(state->entered);
+    handle.stop();
+    require(disconnected == 1 && !handle.isOpen(), "stop must notify synchronously then release");
+    acquire(state->breaking);
+    require(handle.start({state}), "immediate reopen rejected");
+    acquire(state->entered);
+    QCoreApplication::sendPostedEvents(&receiver, QEvent::MetaCall);
+    require(disconnected == 1 && handle.isOpen(), "old disconnect reached new connection");
+    handle.stop();
+    handle.stop();
+    require(disconnected == 2 && state->sent == std::vector<QByteArray>{"tx:off", "tx:off"},
+            "repeated stop duplicated final command");
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication application(argc, argv);
@@ -246,6 +274,7 @@ int main(int argc, char **argv)
     stopDuringCallback();
     stopDuringOpen();
     reconnectAndInitialFailure();
+    synchronousDisconnect();
     std::puts("PASS: Qt Core-only Handle contracts, dispatch, signals, stop and reconnect");
 }
 

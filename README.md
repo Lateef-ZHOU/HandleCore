@@ -64,6 +64,7 @@ set_target_properties(my_app PROPERTIES AUTOMOC ON)
 ## 使用边界
 
 - 所属线程调用 `start/send/stop` 并运行事件循环；数据回调在工作线程同步执行，回调所依赖的资源必须活到 `stop()` 返回。
+- `connectionChanged(false)` 在所属线程的 `stop()` 促断前同步发出，可发送收尾命令；`isOpen()` 在 stop 返回后才保证关闭。界面通过 `QThread::finished` 回读最终状态，不能把该刷新当作再次撤单。同步通知槽不递归启停或销毁 Handle，详见接口契约。
 - 首次打开失败即退出，连接后的 I/O 失败按原机制重连。设备业务配置恢复由协议层或应用负责。
 - `RxTime` 直接使用 `std::chrono::system_clock::time_point`；Qt/QML 登记由应用决定。
 - Serial 成帧器、SimCard 合成器均按值随连接保存。SimCard 在所属线程取固定窗口快照，工作线程不回访 UI；风场、角度历史和功率谱算法不属于库。

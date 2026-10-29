@@ -87,7 +87,8 @@ public:
         return true;
     }
 
-    // 所属线程：唤醒重连等待、打断收包并同步等待线程及在途回调退出，可重复调用。
+    // 所属线程：先同步通知关闭，让接收者在连接仍可用时发送收尾命令，再促断并等待。
+    // 通知接收者不得递归启停本 Handle；重复 stop 不重复通知。
     void stop() noexcept
     {
         if (QThread::currentThread() == this)
@@ -100,6 +101,7 @@ public:
                 qFatal("Handle did not finish");
             return;
         }
+        connectionChanged(false);
         stopGate_.release();
         connBreak(conn_.load().lock());
         if (!wait())
@@ -130,7 +132,9 @@ protected:
     // 派生状态须已由具体类/所有者保护；本层等待不替代提前 stop。
     ~Handle() override { wait(); }
 
-    // 工作线程：仅首连成功与最终退出通知，首次失败不发，中途重连不重复通知。
+    // true 由工作线程在首连成功时发出；false 由所属线程在 stop 促断前同步发出。
+    // 中途重连不通知；false 是关闭前收尾时机，isOpen 在 stop 返回后才保证为 false。
+    // 实际线程退出可监听 QThread::finished，通知槽只回读状态，不再次撤单。
     // 基类只约束函数；需要 QObject::connect 的具体类以 Q_OBJECT/Q_SIGNALS 实现。
     virtual void connectionChanged(bool connected) = 0;
 
@@ -177,10 +181,9 @@ private:
             h = connOpen(params_);
         }
 
-        // 通知退出前释放本轮持有的连接。
+        // 断开通知已由所属线程在促断前发出；此处只释放连接，不排队重复通知。
         h.reset();
         Q_EMIT logMessage("设备连接断开");
-        connectionChanged(false);
     }
 
     // 工作线程打开连接；资源由返回份额及删除器管理，失败由实现自行清理。
