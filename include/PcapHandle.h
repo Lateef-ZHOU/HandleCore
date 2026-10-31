@@ -125,7 +125,14 @@ private:
         switch (kindOf(raw)) // conn 因果必非空（句柄→loop→dispatch），本口自解不判
         {
         case FrameKind::UDPDatagram:
-            return {RXRuling::Decode, UDPDatagram(raw).bodyView(), at};
+        {
+            const auto payload = UDPDatagram(raw).bodyView();
+            // 临时现场诊断：逐次记录 CDL5 接口的实际交付长度，核查完后删除。
+            if (conn->params.hostPort == 55200 && conn->params.devicePort == 55200)
+                Q_EMIT logMessage(QStringLiteral("CDL5 接收诊断：捕获 %1 字节，上交 UDP 载荷 %2 字节")
+                                      .arg(raw.size()).arg(payload.size()));
+            return {RXRuling::Decode, payload, at};
+        }
         case FrameKind::ARPRequest:
             return {RXRuling::Reject, ARPReply(ARPRequest(raw), conn->params.host.macAddress)};
         case FrameKind::ARPReply:

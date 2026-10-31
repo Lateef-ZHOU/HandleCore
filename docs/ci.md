@@ -1,5 +1,11 @@
 # CI 与本地复现
 
+## 2026-10-31：CDL5 临时接收长度日志
+
+- 用户要求在主程序实际接收路径逐包记录长度。PcapHandle 在 UDP Decode 交付前，对两端端口均为 55200 的连接记录捕获字节数与载荷字节数；不改变报文、时间戳或裁决，不新增配置、计数器或接口。测试后删除此诊断块。
+- Windows / MSVC / Qt 6.11.2：既有 build-pcap 的 Release 增量构建、单头编译通过，无编译诊断；该目录当前启用全部模块，CTest 13/13 通过。证据 build-pcap/build-cdl5-length.log、test-cdl5-length.log。
+- 本轮未运行 Linux 或实机采集；随后由主程序更新原入口并由用户采集核实日志。仅本地联调，不推送或发布。
+
 工作流 `.github/workflows/verify.yml` 在公开仓库的 push / pull_request / workflow_dispatch 时运行。各提交的状态和日志见 [GitHub Actions](https://github.com/Lateef-ZHOU/HandleCore/actions/workflows/verify.yml)；以下本地验证记录不代替远端运行结果。
 
 ## 覆盖与环境
