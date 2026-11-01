@@ -46,6 +46,8 @@ struct State
     bool delayOpen = false;
     bool reconnect = false;
     bool sendSucceeds = true;
+    bool retainConnection = false;
+    std::shared_ptr<void> retainedConnection;
     std::vector<QByteArray> input;
     const RxTime at = RxTime{} + std::chrono::microseconds(1234567);
     std::mutex sentGate;
@@ -72,7 +74,7 @@ public:
         : Handle(std::move(callback)), state_(std::move(state)) {}
     ~CoreHandle() override { stop(); }
 Q_SIGNALS:
-    void connectionChanged(bool) override;
+    void connectionChanged(HandleCore::ResourcePhase) override;
     void logMessage(const QString &) const override;
 private:
     std::shared_ptr<Connection> connOpen(const Params &params) override
@@ -88,6 +90,7 @@ private:
     }
     bool connLoop(std::shared_ptr<Connection> conn, Sink sink) override
     {
+        if (state_->retainConnection) state_->retainedConnection = conn;
         ++state_->loops;
         if (state_->reconnect && state_->opens == 1)
             return false;
@@ -145,9 +148,10 @@ void dispatchAndSignals()
         require(data == "data" && at == state->at, "payload or RxTime changed");
         ++state->callbacks;
     });
-    QObject::connect(&handle, &CoreHandle::connectionChanged, &receiver, [&](bool open) {
+    QObject::connect(&handle, &CoreHandle::connectionChanged, &receiver, [&](HandleCore::ResourcePhase phase) {
         require(QThread::currentThread() == ownerThread, "signal receiver not on owner thread");
-        open ? ++connected : ++disconnected;
+        if (phase == HandleCore::ResourcePhase::Acquired) ++connected;
+        if (phase == HandleCore::ResourcePhase::Released) ++disconnected;
     });
     QObject::connect(&handle, &CoreHandle::logMessage, &receiver, [&](const QString &) {
         require(QThread::currentThread() == ownerThread, "log receiver not on owner thread");
@@ -217,7 +221,7 @@ void reconnectAndInitialFailure()
     int failureNotifications = 0;
     QObject receiver;
     QObject::connect(&failure, &CoreHandle::connectionChanged, &receiver,
-                     [&](bool) { ++failureNotifications; });
+                     [&](HandleCore::ResourcePhase phase) { if (phase != HandleCore::ResourcePhase::AboutToAcquire) ++failureNotifications; });
     require(failure.start(Params{failed}) && failure.wait(5000), "initial failure did not finish");
     failure.stop();
     QCoreApplication::sendPostedEvents(&receiver, QEvent::MetaCall);
@@ -229,13 +233,14 @@ void reconnectAndInitialFailure()
     CoreHandle handle(state, [](const QByteArray &, RxTime) {});
     int connected = 0, disconnected = 0;
     QObject::connect(&handle, &CoreHandle::connectionChanged, &receiver,
-                     [&](bool open) { open ? ++connected : ++disconnected; });
+                     [&](HandleCore::ResourcePhase phase) { if (phase == HandleCore::ResourcePhase::Acquired) ++connected;
+        if (phase == HandleCore::ResourcePhase::Released) ++disconnected; });
     require(handle.start(Params{state}), "reconnect probe start rejected");
     acquire(state->entered);
     require(state->opens == 2 && state->closes == 1 && handle.isOpen(), "reconnect failed");
     handle.stop();
     QCoreApplication::sendPostedEvents(&receiver, QEvent::MetaCall);
-    require(connected == 1 && disconnected == 1 && state->closes == 2,
+    require(connected == 2 && disconnected == 2 && state->closes == 2,
             "reconnect notifications or cleanup changed");
 }
 
@@ -245,8 +250,8 @@ void synchronousDisconnect()
     CoreHandle handle(state, [](const QByteArray &, RxTime) {});
     QObject receiver;
     int disconnected = 0;
-    QObject::connect(&handle, &CoreHandle::connectionChanged, &receiver, [&](bool open) {
-        if (open) return;
+    QObject::connect(&handle, &CoreHandle::connectionChanged, &receiver, [&](HandleCore::ResourcePhase phase) {
+        if (phase != HandleCore::ResourcePhase::AboutToRelease) return;
         require(QThread::currentThread() == handle.thread(), "disconnect was queued from worker");
         require(state->breaking.available() == 0 && handle.isOpen(), "disconnect arrived after break/release");
         require(handle.send("off"), "disconnect receiver cannot send final command");
@@ -267,6 +272,37 @@ void synchronousDisconnect()
             "repeated stop duplicated final command");
 }
 
+void releasePhasesAndRetainedConnection()
+{
+    using Phase = HandleCore::ResourcePhase;
+    auto state = std::make_shared<State>();
+    state->retainConnection = true;
+    CoreHandle handle(state, [](const QByteArray &, RxTime) {});
+    std::mutex gate;
+    std::vector<Phase> phases;
+    QObject::connect(&handle, &CoreHandle::connectionChanged, &handle, [&](Phase phase) {
+        const std::lock_guard guard(gate);
+        phases.push_back(phase);
+        if (phase == Phase::Acquired)
+            require(handle.isOpen(), "Acquired must follow connection publication");
+        if (phase == Phase::AboutToRelease) {
+            require(QThread::currentThread() == handle.thread(), "pre-release must be synchronous on owner");
+            require(handle.send("final"), "pre-release cannot send on the still live connection");
+        }
+        if (phase == Phase::Released)
+            require(!handle.isOpen(), "Released must revoke publication even while another share exists");
+    }, Qt::DirectConnection);
+    require(handle.start({state}), "phase probe rejected start");
+    acquire(state->entered);
+    handle.stop();
+    handle.stop();
+    require(phases == std::vector<Phase>{Phase::AboutToAcquire, Phase::Acquired,
+        Phase::AboutToRelease, Phase::Released}, "resource phase order or stop idempotence changed");
+    require(state->closes == 0 && !handle.isOpen() && !handle.send("late"), "retained old resource admitted a send");
+    state->retainedConnection.reset();
+    require(state->closes == 1, "retained resource leaked");
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication application(argc, argv);
@@ -275,6 +311,7 @@ int main(int argc, char **argv)
     stopDuringOpen();
     reconnectAndInitialFailure();
     synchronousDisconnect();
+    releasePhasesAndRetainedConnection();
     std::puts("PASS: Qt Core-only Handle contracts, dispatch, signals, stop and reconnect");
 }
 

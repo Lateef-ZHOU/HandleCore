@@ -2,7 +2,7 @@
 
 C++20 / Qt Core 通信与仿真执行库，供 Windows 和 Linux 的应用层共用。提供同步收发回调、连接重试及同步关闭机制，具体设备业务留在调用方。
 
-基类、Serial 与 SimCard 为头文件目标；Pcap 与 SimGimbal 为静态目标，在库内唯一生成 Qt 信号实现，多个消费库可一起链接。不生成额外 DLL，不依赖 QML、Qt Gui、Quick 或 Qt Test。串口、Pcap、虚拟云台、虚拟采集执行器均为可选模块，**默认全部关闭**。
+Core、Pcap 与 SimGimbal 为静态目标：Core 唯一生成 ResourcePhase 的 Qt 枚举元对象，后两者唯一生成信号实现；Handle、Serial 与 SimCard 的模板实现仍在头文件内。不生成额外 DLL，不依赖 QML、Qt Gui、Quick 或 Qt Test。所有可选模块默认关闭。
 
 自有代码采用 [MIT 许可证](LICENSE)，版权署名为周涛（ZHOU TAO）。第三方依赖保持各自许可证，使用与分发边界见 [第三方依赖说明](THIRD_PARTY_NOTICES.md)。
 
@@ -64,7 +64,7 @@ set_target_properties(my_app PROPERTIES AUTOMOC ON)
 ## 使用边界
 
 - 所属线程调用 `start/send/stop` 并运行事件循环；数据回调在工作线程同步执行，回调所依赖的资源必须活到 `stop()` 返回。
-- `connectionChanged(false)` 在所属线程的 `stop()` 促断前同步发出，可发送收尾命令；`isOpen()` 在 stop 返回后才保证关闭。界面通过 `QThread::finished` 回读最终状态，不能把该刷新当作再次撤单。同步通知槽不递归启停或销毁 Handle，详见接口契约。
+- `connectionChanged(HandleCore::ResourcePhase)` 区分资源阶段：每次打开前 AboutToAcquire、发布连接后 Acquired、撤销连接后 Released。主动 stop 在所属线程、促断前同步发 AboutToRelease，收尾发送和撤单只订阅此阶段；自动重连不发该阶段。完成通知可能排队，界面只回读实际状态，不从事件参数缓存连接状态。QThread::finished 仍表示线程结束，不能代替资源阶段。
 - 首次打开失败即退出，连接后的 I/O 失败按原机制重连。设备业务配置恢复由协议层或应用负责。
 - `RxTime` 直接使用 `std::chrono::system_clock::time_point`；Qt/QML 登记由应用决定。
 - Serial 成帧器、SimCard 合成器均按值随连接保存。SimCard 在所属线程取固定窗口快照，工作线程不回访 UI；风场、角度历史和功率谱算法不属于库。

@@ -41,7 +41,7 @@ public:
     using SerialHandle::SerialHandle;
     ~LineHandle() override { stop(); }
 Q_SIGNALS:
-    void connectionChanged(bool) override;
+    void connectionChanged(HandleCore::ResourcePhase) override;
     void logMessage(const QString &) const override;
 private:
     RXRuling onRX(const QByteArray &frame, RxTime at, std::shared_ptr<ConnType>) override
@@ -58,13 +58,13 @@ private:
 
 class MissingRX : public SerialHandle<Lines>
 {
-    void connectionChanged(bool) override {}
+    void connectionChanged(HandleCore::ResourcePhase) override {}
     void logMessage(const QString &) const override {}
     TXRuling onTX(const QByteArray &, std::shared_ptr<ConnType>) const override { return {}; }
 };
 class MissingTX : public SerialHandle<Lines>
 {
-    void connectionChanged(bool) override {}
+    void connectionChanged(HandleCore::ResourcePhase) override {}
     void logMessage(const QString &) const override {}
     RXRuling onRX(const QByteArray &, RxTime, std::shared_ptr<ConnType>) override { return {}; }
 };
@@ -88,7 +88,7 @@ int main(int argc, char **argv)
     });
     const auto receivedCount = [&] { const std::lock_guard lock(receivedGate); return received.size(); };
     QStringList logs;
-    QObject::connect(&handle, &LineHandle::connectionChanged, &app, [&](bool connected) { connections += connected ? 1 : 10; });
+    QObject::connect(&handle, &LineHandle::connectionChanged, &app, [&](HandleCore::ResourcePhase phase) { if (phase == HandleCore::ResourcePhase::Acquired) ++connections; if (phase == HandleCore::ResourcePhase::Released) connections += 10; });
     QObject::connect(&handle, &LineHandle::logMessage, &app, [&](const QString &text) { logs.push_back(text); });
     require(handle.start(params) && until([&] { return handle.isOpen(); }), "open failed");
     require(!handle.start(params), "duplicate start accepted");
@@ -125,7 +125,7 @@ int main(int argc, char **argv)
     handle.stop(); handle.stop();
     QCoreApplication::processEvents();
     require(received == std::vector<QByteArray>{"one", "two", "partial", "fresh"}, "framer state leaked across connections");
-    require(connections == 11 && livePorts() == 0 && closes() == 2, "connection notifications or resource release changed");
+    require(connections == 22 && livePorts() == 0 && closes() == 2, "each connection must announce acquisition and release");
     require(onWorker && typedTime, "callback thread/time changed");
     require(logs.contains("串口发送超时，仅写入 2/4 字节") && logs.contains("串口发送失败，错误码 -2"), "write diagnostics missing");
 

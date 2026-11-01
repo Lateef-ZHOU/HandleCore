@@ -54,3 +54,7 @@ cmake "-DBUILD_ROOT=<构建目录>" "-DPREFIX_PATH=<Qt 前缀>;<libserialport �
 - 初次本地脚本遇到多前缀分号拆参、官方 Linux Qt 缺配套 ICU 的问题，分别改用初始缓存传递列表、安装 Qt 同版 ICU 后重跑通过；未修改运行代码或系统 Qt。
 
 完整本地日志保存在维护方的 `2026-10-24-handle-release-prep` 证据目录；迁入阶段的其他结果见 reference.md。库的生产头、既有测试代码、重连/关闭/裁决逻辑本轮未改。
+
+## 2026-11-02 资源阶段验证
+
+Windows / MSVC / Qt 6.11.2 全模块 Release 与公开头编译通过，CTest 13/13；新增同步 AboutToRelease 可发送、阶段顺序、重复 stop、旧连接外部份额保活不再开放发送的检查。新增 ResourcePhase/HandleBase 单头编译后重跑核心通过。Linux / GCC 16.2.1 / Qt Core 6.8.3 核心与两项仿真模块构建、CTest 9/9 通过（ArchHFNL 的 resource-phase-20261102/handle-build）。Linux 本轮未启用串口/Pcap；未操作 ARM 或硬件。Windows 证据：build/resource-build-final.log、resource-test.log、resource-test-final.log。

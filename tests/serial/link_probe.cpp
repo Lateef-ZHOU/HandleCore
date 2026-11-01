@@ -13,7 +13,7 @@ public:
     using SerialHandle::SerialHandle;
     ~RawSerial() override { stop(); }
 Q_SIGNALS:
-    void connectionChanged(bool) override;
+    void connectionChanged(HandleCore::ResourcePhase) override;
     void logMessage(const QString &) const override;
 private:
     RXRuling onRX(const QByteArray &raw, RxTime at, std::shared_ptr<ConnType>) override { return {RXRuling::Decode, raw, at}; }

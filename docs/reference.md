@@ -9,7 +9,7 @@ Handle 按通信方式和协议复用，不按 Windows 设备或 Linux 设备划
 ## 依赖与使用
 
 - CMake 3.28 或以上、C++20、Qt Core >= 6.8.3；核心目标不依赖 QML、Gui、Quick、Qt Test、Npcap、libserialport 或应用 Device/Collector。可选串口目标额外依赖 libserialport，Pcap 模块额外依赖 libpcap >= 1.10.0（Windows 使用 Npcap）。
-- `HandleCore` 是头文件目标，别名为 `Lidar::HandleCore`；使用方通过 FetchContent 固定本库的完整提交号，或 `add_subdirectory(<本库目录>)`，并链接该目标，即取得头文件路径、C++20 要求和 Qt Core 链接依赖。
+- `HandleCore` 是静态目标，别名为 `Lidar::HandleCore`；模板实现保留在头文件，目标唯一生成 ResourcePhase 的 Qt namespace 元对象。使用方链接该目标取得头文件路径、C++20 与 Qt Core 依赖，无额外 DLL，也不链接 QML。
 - 独立调用方包含 `<HandleBase.h>`。基类的 `RxTime` 直接别名到 `std::chrono::system_clock::time_point`；应用自己的 `RxTime.h` 仍负责 Qt 元类型及 QML 登记，二者没有类型包装或转换。
 - 需要 Qt 信号的具体类型使用 `Q_OBJECT` / `Q_SIGNALS` 并启用 AUTOMOC；模板基类只声明纯虚通知函数，不依赖 QML，也不替具体类登记信号。
 
@@ -34,9 +34,9 @@ Makefiles 等单配置生成器在配置时加 `-DCMAKE_BUILD_TYPE=Release`。Wi
 - 构造时提供可调用的数据回调，回调在收包线程同步执行。字节可能借用外部缓冲；异步留存者负责数据所有权，RxTime 可按值复制。
 - Handle 持有调用方交入的 onData；内部 Sink 由私有静态 makeDispatch 在每轮 connLoop 前现场生成，不存固定派发闭包成员。虚拟云台将 Sink 移入 Qt 定时器槽，虚拟采集将结果交付函数移入连接；串口/Pcap 在同步收包栈上借用 Sink。接收方仍须遵守 stop 返回前退出在途回调的契约。
 - 一次 `onRX` 产生一项裁决：Decode 上交一份数据，Reject 仅回发一份响应，Drop 无动作。`onTX` 的 Encode 交给 `connSend`，Drop 返回失败。接口及行为未扩展。
-- 首次打开失败即退出；建立过连接后 I/O 失败按原有一秒间隔重连。`connectionChanged(true)` 仍在首连成功时由工作线程发出，中途重连透明。设备配置恢复归具体实现或上层业务。
-- `stop()` 在所属线程先同步发出 `connectionChanged(false)`，接收方可用尚未促断的连接发送一次收尾指令；随后记录停止请求、促断并等待收包线程与同步回调退出。false 不再从 worker 退出路径排队发出，重复 stop 不重复通知；首次打开失败已退出后调用 stop 不通知。打开中/重连间隙关闭仍会通知，但发送可能失败，失败不阻止关闭。
-- false 是关闭前收尾时机，此时 `isOpen()` 可能仍为 true，`stop()` 返回后才保证关闭。界面可连接现有 `QThread::finished` 通知并回读实际状态，该通知不参与撤单。通知槽不得递归调用本 Handle 的 start/stop、泵事件或销毁 Handle；异线程强制排队的槽不属于同步收尾保证。接收方遇到迟到的首连 true，应回读实际连接再启动其业务。
+- 首次打开失败即退出；建立过连接后 I/O 失败仍按一秒间隔重连。每次打开前发 AboutToAcquire，发布可发送连接后发 Acquired，撤销观察口并释放工作线程份额后发 Released。打开失败不会伪造 Acquired/Released；自动重连的阶段也通知，但不发 AboutToRelease。上层通过实际状态判断是否重新配置。
+- `stop()` 在所属线程先同步发 connectionChanged(ResourcePhase::AboutToRelease)，接收方可在促断前尝试收尾发送；随后记录停止请求、促断并等待收包与同步回调退出。重复 stop 不重复通知；首次打开失败已退出后调用 stop 不通知。打开中/重连间隙关闭仍通知，但发送可能失败，失败不阻止关闭。
+- AboutToRelease 是主动关闭前的收尾窗口，此时 isOpen 可能为真；stop 返回保证收包退出并撤销连接观察口。收尾槽不得递归 start/stop、泵事件或销毁 Handle，强制排队的槽不享有同步保证。其余阶段来自 worker，可能排队；Acquired/Released 仅通知回读实际状态，不能据旧事件撤单或推断当前连接。外部仍持有旧连接份额也不能让 isOpen/send 继续使用它。
 - 所有者和具体类在拆除回调依赖前同步关闭，不增加状态位、超时或第二条清理链。关停只保证已尝试发送收尾命令，不等设备确认或排空未处理数据。
 
 ## 验证覆盖

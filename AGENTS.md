@@ -1,8 +1,10 @@
 # HandleCore 维护约束
 
+- 2026-11-02 用户定：连接通知改为 connectionChanged(ResourcePhase)，主动 stop 的 AboutToRelease 同步供收尾发送/撤单；每次建立和撤销连接发 Acquired/Released，完成通知只供回读事实。自动重连不发 AboutToRelease，关闭等待、首连失败退出和重试策略保持，无阶段缓存。
+
 - 2026-10-31 本地诊断已结束（用户定）：用户实采确认主程序收到 7168 字节 UDP 载荷（捕获长度 7210），临时逐包长度日志及端口判断已删除。PcapHandle 恢复已发布 3470a1d 的代码，接收裁决不变；应用恢复该远端固定版本。本轮未推送，验证见 docs/ci.md。
 
-- 本库为 C++20 / Qt Core 头文件库。基类与测试从 LiDAR_DataACQ 8f792a8 迁入；当前接口和构建命令见 README.md。
+- 本库为 C++20 / Qt Core 库，模板在头文件，枚举元对象由静态目标唯一生成。基类与测试从 LiDAR_DataACQ 8f792a8 迁入；当前接口和构建命令见 README.md。
 - 中文沟通；本地提交使用中文 type(scope): 标题，正文记录改动、理由和实际验证。推送需用户明确指示。
 - Handle 面向传输与协议，Windows 与 Linux 上层可以复用同一子类；只有实际系统 API 差异才适配，不按业务部署平台拆族。当前包含基类、可选通用串口、Pcap ARP/UDP、虚拟云台和虚拟采集执行模块；Pelco-D、风场与谱合成等设备业务仍在应用中。
 - 不加 friend、假想需求抽象、额外关闭链或析构状态。RxTime 直接 using 标准库类型；QML 登记归使用方。

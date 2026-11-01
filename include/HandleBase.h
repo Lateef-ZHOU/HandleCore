@@ -9,6 +9,7 @@
 #include <QSemaphore>
 #include <QString>
 #include <QThread>
+#include "ResourcePhase.h"
 
 // 接收时刻按值交付；Qt 元类型与 QML 登记由使用方按需提供。
 using RxTime = std::chrono::system_clock::time_point;
@@ -101,7 +102,7 @@ public:
                 qFatal("Handle did not finish");
             return;
         }
-        connectionChanged(false);
+        connectionChanged(HandleCore::ResourcePhase::AboutToRelease);
         stopGate_.release();
         connBreak(conn_.load().lock());
         if (!wait())
@@ -132,11 +133,12 @@ protected:
     // 派生状态须已由具体类/所有者保护；本层等待不替代提前 stop。
     ~Handle() override { wait(); }
 
-    // true 由工作线程在首连成功时发出；false 由所属线程在 stop 促断前同步发出。
-    // 中途重连不通知；false 是关闭前收尾时机，isOpen 在 stop 返回后才保证为 false。
-    // 实际线程退出可监听 QThread::finished，通知槽只回读状态，不再次撤单。
+    // AboutToRelease 仅由主动 stop 在所属线程同步发出；收尾槽不得排队、重入启停或泵事件。
+    // 其余阶段由工作线程发出。每次打开（含重连）先 AboutToAcquire，发布后 Acquired，
+    // 撤销后 Released；打开失败只报告失败，不伪造已获取/已释放事件。
+    // 自动重连不发 AboutToRelease，不撤销上层任务；完成通知只用于回读现状。
     // 基类只约束函数；需要 QObject::connect 的具体类以 Q_OBJECT/Q_SIGNALS 实现。
-    virtual void connectionChanged(bool connected) = 0;
+    virtual void connectionChanged(HandleCore::ResourcePhase phase) = 0;
 
     // 可从调用线程或收包线程发射；接收方决定显示、记录及线程接线。
     virtual void logMessage(const QString &text) const = 0;
@@ -150,6 +152,7 @@ private:
     // 先发布连接再检查停止请求，覆盖打开期间到达的 stop。
     void run() final
     {
+        connectionChanged(HandleCore::ResourcePhase::AboutToAcquire);
         auto h = connOpen(params_);
         if (!h)
         {
@@ -162,15 +165,19 @@ private:
             {
                 conn_.store(h);
 
-                if (stopGate_.tryAcquire())
-                    break;
-                if (i == 1)
+                const bool stopping = stopGate_.tryAcquire();
+                bool clean = true;
+                if (!stopping)
                 {
-                    connectionChanged(true);
-                    Q_EMIT logMessage("设备连接成功");
+                    connectionChanged(HandleCore::ResourcePhase::Acquired);
+                    if (i == 1)
+                        Q_EMIT logMessage("设备连接成功");
+                    clean = connLoop(h, makeDispatch(this));
                 }
-                const bool clean = connLoop(h, makeDispatch(this));
+                // 先撤观察口，再释放本地资源。排队消息中的旧份额不再使 isOpen 为真。
+                conn_.store({});
                 h.reset();
+                connectionChanged(HandleCore::ResourcePhase::Released);
 
                 if (clean)
                     break;
@@ -178,11 +185,10 @@ private:
             Q_EMIT logMessage(QString("设备连接断开，1 秒后尝试第 %1 次重连").arg(i));
             if (stopGate_.tryAcquire(1, 1000))
                 break;
+            connectionChanged(HandleCore::ResourcePhase::AboutToAcquire);
             h = connOpen(params_);
         }
 
-        // 断开通知已由所属线程在促断前发出；此处只释放连接，不排队重复通知。
-        h.reset();
         Q_EMIT logMessage("设备连接断开");
     }
 

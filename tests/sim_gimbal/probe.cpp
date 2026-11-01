@@ -55,7 +55,7 @@ static void rejectedConnections()
         QObject::connect(&handle, &SimGimbalHandle::logMessage, &handle,
                          [&](const QString &) { ++logs; }, Qt::DirectConnection);
         QObject::connect(&handle, &SimGimbalHandle::connectionChanged, &handle,
-                         [&](bool value) { if (value) ++opened; }, Qt::DirectConnection);
+                         [&](HandleCore::ResourcePhase phase) { if (phase == HandleCore::ResourcePhase::Acquired) ++opened; }, Qt::DirectConnection);
         require(handle.start(p), "start must retain asynchronous acceptance contract");
         require(until([&] { return !handle.isRunning(); }), "invalid open did not finish");
         handle.stop();
@@ -80,9 +80,9 @@ static void traffic()
         ++frames;
     });
     int connections = 0;
-    QObject::connect(&handle, &SimGimbalHandle::connectionChanged, &handle, [&](bool up) {
+    QObject::connect(&handle, &SimGimbalHandle::connectionChanged, &handle, [&](HandleCore::ResourcePhase phase) {
         require(QThread::currentThread() == owner, "connection notification not on owner");
-        if (up) { ++connections; require(handle.send(command(Command::SetSpeed, 0, 0, {12000, 12000})), "send on connection notification"); }
+        if (phase == HandleCore::ResourcePhase::Acquired) { ++connections; require(handle.send(command(Command::SetSpeed, 0, 0, {12000, 12000})), "send on connection notification"); }
     });
     auto arrived = [&](double pan, double tilt) {
         return until([&] { const std::lock_guard lock(gate); return frames > 0 &&

@@ -5,12 +5,13 @@ project(LidarHandleCore LANGUAGES CXX)
 find_package(Qt6 6.8.3 REQUIRED COMPONENTS Core)
 
 # 直接使用生产头；此目标不包含设备、QML 登记或任何具体传输实现。
-add_library(HandleCore INTERFACE)
+add_library(HandleCore STATIC include/ResourcePhase.h include/HandleBase.h)
+set_target_properties(HandleCore PROPERTIES AUTOMOC ON POSITION_INDEPENDENT_CODE ON)
+qt_extract_metatypes(HandleCore)
 add_library(Lidar::HandleCore ALIAS HandleCore)
-target_compile_features(HandleCore INTERFACE cxx_std_20)
-target_include_directories(HandleCore INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_sources(HandleCore INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include/HandleBase.h")
-target_link_libraries(HandleCore INTERFACE Qt6::Core)
+target_compile_features(HandleCore PUBLIC cxx_std_20)
+target_include_directories(HandleCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(HandleCore PUBLIC Qt6::Core)
 
 option(HANDLECORE_WITH_SERIAL "Build the portable serial transport target and its tests" OFF)
 if(HANDLECORE_WITH_SERIAL)
