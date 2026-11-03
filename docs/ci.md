@@ -1,5 +1,11 @@
 # CI 与本地复现
 
+## 2026-11-03 基类声明清理（用户定）
+
+删除 Handle 本层重复的 Q_DISABLE_COPY 和显式默认构造，默认构造由编译器生成，不可复制/移动沿用 QThread/QObject 基类约束；移除未使用的 concepts、utility 头文件。智能指针参数、收发裁决、重连和同步关闭逻辑未改。
+
+Windows/MSVC/Qt 6.11.2：既有 build-virtual-all 全模块 Release 增量构建（含公开头编译）通过，无 C++ 编译警告；CTest 9/9 通过。证据为 build-virtual-all/build-base-cleanup.log、test-base-cleanup.log。本轮未重跑 Linux、ARM 或实物通信；仅本地提交，未推送。
+
 ## 2026-11-03 裁决值与参数接口整理
 
 RXRuling/TXRuling 继承 QByteArray，动作使用匿名枚举成员，删除 payload；调用处改为字节在前的聚合初始化。删除 HandleParameters、ParamType/ConnType 及四项只针对旧参数 concept 的负向编译测试，具体传输直接使用实际类型，HandleLike 仅检查公开继承关系。

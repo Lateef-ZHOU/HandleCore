@@ -1,10 +1,8 @@
 #pragma once
 #include <atomic>
 #include <chrono>
-#include <concepts>
 #include <functional>
 #include <memory>
-#include <utility>
 #include <QByteArray>
 #include <QSemaphore>
 #include <QString>
@@ -46,10 +44,6 @@ template <typename ParamT, typename ConnT>
 class Handle : public QThread
 {
 public:
-    Q_DISABLE_COPY(Handle)
-
-    Handle() = default;
-
     // 已连接且参数不同则重启；运行中其余请求拒收。true 仅表示接受启动参数。
     bool start(const ParamT &params)
     {
