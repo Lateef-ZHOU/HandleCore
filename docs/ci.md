@@ -1,5 +1,11 @@
 # CI 与本地复现
 
+## 2026-11-03 ARP 状态归所属线程（用户定）
+
+PcapConn 扁平保存 deviceMAC 与 pending，删除 ArpState、原子共享指针和 CAS。连接发布前初始化 MAC 种子；发布后发送、MAC 学习和 pending 补发均在所属线程。worker 仅解析 ARP 回应并捕获原连接/MAC 投递；未知 MAC 时保留最新报文并 detach 字节，学习后取空补发，重复回应不重复发送。原连接保活、停止/重连后原连接队列继续执行及析构移除队列项的裁定保持，HandleBase 不改。
+
+Windows/MSVC/Qt 6.11.2 全模块 Release、公开头编译与 CTest 9/9（12.54 秒）通过，无 C++ 编译诊断。新增受控验证覆盖回应已收但主线程尚未处理时替换 pending、借用源复用、重复回应、种子 MAC、旧学习事件跨停止/重连不污染新连接以及析构取消。证据 build-virtual-all/{build,test}-arp-owner.log。本轮未测 Linux、ARM 或实物，未推送。
+
 ## 2026-11-03 删除 Pcap 启动转发（用户定）
 
 删除 PcapHandle::start，直接继承基类入口；运行中拒绝日志放入 Handle::start 的既有 isRunning 分支，删除要求手动断开才能更换参数的错误提示。不改自动重启、重连和关闭逻辑。

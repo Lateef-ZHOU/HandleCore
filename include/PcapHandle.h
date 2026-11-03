@@ -1,10 +1,10 @@
 #pragma once
 #include <functional>
-#include <atomic>
 #include <chrono>
 #include <memory>
 #include <utility>
 #include <QByteArray>
+#include <QMetaObject>
 #include <pcap.h>
 #include "HandleBase.h"
 #include "PcapInterfaces.h"
@@ -23,19 +23,13 @@ struct PcapParams
     bool operator==(const PcapParams &) const = default;
 };
 
-// 学习 MAC 与摘走最新挂起报文必须是同一个原子操作。
-struct ArpState
-{
-    MAC deviceMAC;
-    QByteArray pending;
-    ArpState(MAC mac, QByteArray bytes) : deviceMAC(std::move(mac)), pending(std::move(bytes)) {}
-};
-
 struct PcapConn
 {
     pcap_t *const p;
     const PcapParams params;
-    std::atomic<std::shared_ptr<const ArpState>> arp;
+    // 发布前初始化；发布后仅所属线程学习 MAC、暂存和取走最新报文。
+    MAC deviceMAC;
+    QByteArray pending;
     static void close(PcapConn *conn)
     {
         pcap_close(conn->p);
@@ -119,12 +113,16 @@ private:
             if (reply.senderIP() != conn->params.deviceIPv4)
                 return {};
             const MAC mac = reply.senderMAC();
-            const auto old = conn->arp.exchange(std::make_shared<const ArpState>(mac, QByteArray{}));
-            if (!old || old->pending.isEmpty())
-                return {}; // 纯学习，无挂起报文
-            return {UDPDatagram(mac, conn->params.host.macAddress, conn->params.hostIPv4, conn->params.deviceIPv4,
-                                conn->params.hostPort, conn->params.devicePort, old->pending),
-                    RXRuling::Reject};
+            // 收包只提取 MAC；学习与补发在所属线程一次完成，原连接随队列项保活。
+            QMetaObject::invokeMethod(this, [this, conn, mac] {
+                conn->deviceMAC = mac;
+                const auto pending = std::exchange(conn->pending, QByteArray{});
+                if (!pending.isEmpty())
+                    (void)connSend(conn, UDPDatagram(mac, conn->params.host.macAddress,
+                        conn->params.hostIPv4, conn->params.deviceIPv4,
+                        conn->params.hostPort, conn->params.devicePort, pending));
+            }, Qt::QueuedConnection);
+            return {};
         }
         default:
             return {}; // 完备性兜底：不认识的种类 / 结构长度不足 / 垫底帧——Drop
@@ -138,18 +136,14 @@ private:
             Q_EMIT logMessage("设备未连接，无法发送数据");
             return {}; // 未连接：无 conn 可组包
         }
-        auto s = conn->arp.load();
-        if (s && !s->deviceMAC.isNull()) // 对端 MAC 已知：直接组 UDP
-            return {UDPDatagram(s->deviceMAC, conn->params.host.macAddress, conn->params.hostIPv4, conn->params.deviceIPv4,
-                                conn->params.hostPort, conn->params.devicePort, payload),
-                    TXRuling::Encode};
-        const auto stash = std::make_shared<const ArpState>(MAC{}, payload);
-        if (conn->arp.compare_exchange_strong(s, stash))
+        if (conn->deviceMAC.isNull())
         {
+            conn->pending = payload;
+            conn->pending.detach(); // 调用方可能交入借用视图，待 ARP 回应时仍须有效。
             Q_EMIT logMessage("对端 MAC 未知，报文已暂存，正在探测");
             return {ARPRequest(conn->params.host.macAddress, conn->params.hostIPv4, conn->params.deviceIPv4), TXRuling::Encode};
         }
-        return {UDPDatagram(s->deviceMAC, conn->params.host.macAddress, conn->params.hostIPv4, conn->params.deviceIPv4,
+        return {UDPDatagram(conn->deviceMAC, conn->params.host.macAddress, conn->params.hostIPv4, conn->params.deviceIPv4,
                             conn->params.hostPort, conn->params.devicePort, payload),
                 TXRuling::Encode};
     }
@@ -165,7 +159,7 @@ inline std::shared_ptr<PcapConn> PcapHandle::connOpen(const PcapParams &params)
         return {};
     }
     // create 之后立即接管资源；所有失败路径均由同一个删除器释放。
-    auto conn = std::shared_ptr<PcapConn>(new PcapConn{raw, params, {}}, &PcapConn::close);
+    auto conn = std::shared_ptr<PcapConn>(new PcapConn{raw, params, params.deviceMAC, {}}, &PcapConn::close);
     if (pcap_set_snaplen(raw, 65536) != 0 || pcap_set_promisc(raw, 1) != 0 ||
         pcap_set_timeout(raw, static_cast<int>(params.readTimeout.count())) != 0 ||
         pcap_set_buffer_size(raw, params.kernelBufferBytes) != 0 || pcap_activate(raw) < 0)
@@ -173,8 +167,6 @@ inline std::shared_ptr<PcapConn> PcapHandle::connOpen(const PcapParams &params)
         Q_EMIT logMessage(QStringLiteral("网卡配置或激活失败：%1").arg(QString::fromLocal8Bit(pcap_geterr(raw))));
         return {};
     }
-    if (!params.deviceMAC.isNull())
-        conn->arp.store(std::make_shared<const ArpState>(params.deviceMAC, QByteArray{}));
     bpf_program program{};
     if (pcap_compile(raw, &program, buildFilter(params).toLocal8Bit().constData(), 1, PCAP_NETMASK_UNKNOWN) < 0)
     {

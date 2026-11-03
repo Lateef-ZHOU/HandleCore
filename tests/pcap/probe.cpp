@@ -81,40 +81,90 @@ void queuedArpAndUdp()
 }
 void capturedReplies()
 {
-    for (bool reconnect : {false, true})
+    for (bool learning : {false, true})
     {
-        FakePcap::reset();
-        CallbackHandle<PcapHandle> h([](const QByteArray &, RxTime) {});
-        const auto p = params(); open(h, p);
-        auto old = FakePcap::last();
-        FakePcap::inject(old, ARPRequest(peer(), p.deviceIPv4, p.hostIPv4));
-        until([&] { return old->delivered == 1; }, false);
-        if (reconnect)
+        for (bool reconnect : {false, true})
         {
-            FakePcap::fail(old);
-            until([&] { return FakePcap::opens() == 2 && h.isOpen(); }, false);
+            FakePcap::reset();
+            CallbackHandle<PcapHandle> h([](const QByteArray &, RxTime) {});
+            const auto p = params(); open(h, p);
+            auto old = FakePcap::last();
+            if (learning)
+            {
+                require(h.send("pending"), "pending probe rejected");
+                FakePcap::inject(old, ARPReply(ARPRequest(p.host.macAddress, p.hostIPv4, p.deviceIPv4), peer()));
+            }
+            else FakePcap::inject(old, ARPRequest(peer(), p.deviceIPv4, p.hostIPv4));
+            until([&] { return old->delivered == 1; }, false);
+            if (reconnect)
+            {
+                FakePcap::fail(old);
+                until([&] { return FakePcap::opens() == 2 && h.isOpen(); }, false);
+            }
+            else { h.stop(); open(h, p); }
+            require(!old->closed, "queued reply lost its captured connection");
+            QCoreApplication::processEvents();
+            require(old->closed, "completed queued reply leaked its connection");
+            const auto replies = FakePcap::sent();
+            const QByteArray expected = learning
+                ? QByteArray(UDPDatagram(peer(), p.host.macAddress, p.hostIPv4, p.deviceIPv4,
+                                        p.hostPort, p.devicePort, "pending"))
+                : QByteArray(ARPReply(ARPRequest(peer(), p.deviceIPv4, p.hostIPv4), p.host.macAddress));
+            require(replies.size() == (learning ? 2u : 1u) && replies.back().id == old->id
+                    && replies.back().thread == QThread::currentThread()
+                    && replies.back().bytes == expected,
+                    "queued reply did not use its captured connection and bytes on the owner thread");
+            require(h.send("fresh") && kindOf(FakePcap::sent().back().bytes) == FrameKind::ARPRequest,
+                    "replacement connection reused ARP state");
+            h.stop();
         }
-        else { h.stop(); open(h, p); }
-        require(!old->closed, "queued reply lost its captured connection");
+        FakePcap::reset();
+        {
+            CallbackHandle<PcapHandle> h([](const QByteArray &, RxTime) {}); const auto p = params(); open(h, p);
+            auto s = FakePcap::last();
+            if (learning)
+            {
+                require(h.send("pending"), "pending destruction probe rejected");
+                FakePcap::inject(s, ARPReply(ARPRequest(p.host.macAddress, p.hostIPv4, p.deviceIPv4), peer()));
+            }
+            else FakePcap::inject(s, ARPRequest(peer(), p.deviceIPv4, p.hostIPv4));
+            until([&] { return s->delivered == 1; }, false);
+        }
         QCoreApplication::processEvents();
-        require(old->closed, "completed queued reply leaked its connection");
-        const auto replies = FakePcap::sent();
-        require(replies.size() == 1 && replies.front().id == old->id
-                && replies.front().thread == QThread::currentThread()
-                && replies.front().bytes == ARPReply(ARPRequest(peer(), p.deviceIPv4, p.hostIPv4), p.host.macAddress),
-                "queued reply did not use its captured connection and bytes on the owner thread");
-        require(h.send("fresh") && kindOf(FakePcap::sent().back().bytes) == FrameKind::ARPRequest,
-                "replacement connection reused ARP state");
-        h.stop();
+        require(FakePcap::sent().size() == (learning ? 1u : 0u) && FakePcap::last()->closed,
+                "destructor left a live queued response");
     }
+}
+
+void ownerArpLearning()
+{
     FakePcap::reset();
-    {
-        CallbackHandle<PcapHandle> h([](const QByteArray &, RxTime) {}); const auto p = params(); open(h, p);
-        auto s = FakePcap::last(); FakePcap::inject(s, ARPRequest(peer(), p.deviceIPv4, p.hostIPv4));
-        until([&] { return s->delivered == 1; }, false);
-    }
+    CallbackHandle<PcapHandle> h([](const QByteArray &, RxTime) {});
+    const auto p = params(); open(h, p);
+    const auto s = FakePcap::last();
+    const ARPReply reply(ARPRequest(p.host.macAddress, p.hostIPv4, p.deviceIPv4), peer());
+    require(h.send("first"), "initial ARP probe rejected");
+    FakePcap::inject(s, reply);
+    until([&] { return s->delivered == 1; }, false);
+    QByteArray source("latest");
+    require(h.send(QByteArray::fromRawData(source.constData(), source.size())), "pending replacement rejected");
+    require(FakePcap::sent().size() == 2
+            && kindOf(FakePcap::sent().back().bytes) == FrameKind::ARPRequest,
+            "worker learned MAC before owner processed the event");
+    source.fill('x');
+    until([&] { return FakePcap::sent().size() == 3; });
+    require(UDPDatagram(FakePcap::sent().back().bytes).bodyView() == "latest",
+            "learning did not take the latest owning pending payload");
+    FakePcap::inject(s, reply);
+    until([&] { return s->delivered == 2; }, false);
     QCoreApplication::processEvents();
-    require(FakePcap::sent().empty() && FakePcap::last()->closed, "destructor left a live queued response");
+    require(FakePcap::sent().size() == 3, "duplicate ARP reply resent consumed pending payload");
+    require(h.send("known") && FakePcap::sent().size() == 4
+            && UDPDatagram(FakePcap::sent().back().bytes).bodyView() == "known",
+            "learned MAC was not used for direct send");
+    for (const auto &sent : FakePcap::sent())
+        require(sent.thread == QThread::currentThread(), "ARP send escaped owner thread");
+    h.stop();
 }
 void openFailuresAndStop()
 {
@@ -141,6 +191,6 @@ void openFailuresAndStop()
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
-    queuedArpAndUdp(); capturedReplies(); openFailuresAndStop();
+    queuedArpAndUdp(); ownerArpLearning(); capturedReplies(); openFailuresAndStop();
     std::puts("Pcap production I/O, owner-thread sends, captured replies, ARP/UDP and lifecycle passed");
 }
