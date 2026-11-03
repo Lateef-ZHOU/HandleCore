@@ -40,7 +40,6 @@ class LineHandle : public SerialHandle<Lines>
 {
     Q_OBJECT
 public:
-    using SerialHandle::SerialHandle;
     ~LineHandle() override = default;
 Q_SIGNALS:
     void connectionChanged(HandleCore::ResourcePhase) override;
@@ -73,6 +72,10 @@ class MissingTX : public SerialHandle<Lines>
     RXRuling onRX(const QByteArray &, RxTime, std::shared_ptr<SerialConn<Lines>>) override { return {}; }
 };
 static_assert(std::is_abstract_v<SerialHandle<Lines>> && std::is_abstract_v<MissingRX> && std::is_abstract_v<MissingTX>);
+static_assert(!std::is_copy_constructible_v<SerialConn<Lines>>);
+static_assert(!std::is_copy_assignable_v<SerialConn<Lines>>);
+static_assert(!std::is_move_constructible_v<SerialConn<Lines>>);
+static_assert(!std::is_move_assignable_v<SerialConn<Lines>>);
 static_assert(HandleLike<LineHandle>);
 
 int main(int argc, char **argv)

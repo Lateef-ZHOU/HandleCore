@@ -168,3 +168,10 @@ Windows MSVC / Qt 6.11.2：build-virtual-all 全模块 Release、公开头 /W4 /
 ## 2026-11-03 串口纯虚契约去重
 
 删除 SerialHandle 本层重复的 onRX/onTX 纯虚声明，直接继承 Handle 的约束；不改变收发、重连和关闭。Windows build-virtual-all 增量构建成功，CTest 9/9（12.54 秒）。现有 MissingRX/MissingTX 编译期断言通过，证明协议遗漏实现仍为抽象类。证据：build-virtual-all/build-serial-contract.log、test-serial-contract.log。本轮未测 Linux 或硬件。
+
+
+## 2026-11-03 串口声明整理（用户定）
+
+删除 SerialConn 重复复制禁令、两个测试的无效构造继承声明，纠正串口描述用途注释。补齐不可复制构造、复制赋值、移动构造、移动赋值四项 static_assert；收发、重连和关闭代码不变。
+
+Windows/MSVC/Qt 6.11.2：build-virtual-all Release 增量构建成功，CTest 6/6（4.86 秒）。主程序以相邻源码覆盖接入，增量 Release 构建与八秒离屏冒烟通过，仅既有 FT_New_Face 提示。证据：build-virtual-all/{build,test}-serial-cleanup.log，LiDAR_DataACQ/build/build-serial-cleanup.log、smoke-serial-cleanup.json。未测 Linux、ARM 或实物，本轮不推送。

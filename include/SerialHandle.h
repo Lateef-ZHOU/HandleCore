@@ -22,8 +22,6 @@ template <SerialFramer Framer>
 class SerialConn
 {
 public:
-    Q_DISABLE_COPY(SerialConn)
-
     [[nodiscard]] static std::shared_ptr<SerialConn> open(const SerialParams &params)
     {
         // 0 在 libserialport 中表示无限等待；串口写保持有限超时。

@@ -122,3 +122,6 @@ Linux 另以 libpcap 1.9.1 的 pkg-config 元数据确认配置拒绝，关闭�
 ## 多官邸共同链接
 
 Pcap 的 QObject 元对象实现归各自静态目标；模块保持默认关闭。Serial 的 Config 导入目标设为 GLOBAL，与 pkg-config 路径一致，允许同一构建的兄弟消费目标使用。运行实现未改，重连和同步关闭契约保持。`multi_consumer` 验证两个独立 QObject 消费库同时链接时没有重复元对象定义。
+
+
+SerialConn 的不可复制、不可移动由现有原子成员等类型约束保证，不重复声明 Q_DISABLE_COPY；串口测试以四项类型特征断言覆盖。SerialPortInfo 的名称参与连接身份比较，描述用于枚举展示，不参与比较。无自定义基类构造函数时，测试和协议子类不保留继承构造声明。

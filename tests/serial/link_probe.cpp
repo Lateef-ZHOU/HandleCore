@@ -12,7 +12,6 @@ class RawSerial : public SerialHandle<Bytes>
 {
     Q_OBJECT
 public:
-    using SerialHandle::SerialHandle;
     ~RawSerial() override = default;
 Q_SIGNALS:
     void connectionChanged(HandleCore::ResourcePhase) override;
