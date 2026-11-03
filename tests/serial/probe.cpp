@@ -1,3 +1,4 @@
+#include <functional>
 #include "../CallbackHandle.h"
 #include <SerialHandle.h>
 #include "FakeSerialPort.h"
@@ -20,7 +21,7 @@ template <typename Predicate> bool until(Predicate ready, int ms = 3000)
 class Lines
 {
 public:
-    void feed(const QByteArray &chunk, RxTime at, const DataCallback &deliver)
+    void feed(const QByteArray &chunk, RxTime at, const std::function<void(const QByteArray &, RxTime)> &deliver)
     {
         tail_.append(chunk);
         for (auto newline = tail_.indexOf('\n'); newline >= 0; newline = tail_.indexOf('\n'))

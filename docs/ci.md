@@ -71,3 +71,7 @@ Windows / MSVC / Qt 6.11.2 全模块 Release 与公开头编译通过，CTest 13
 上传入口改为纯虚 onData；删除外部上传回调存储/构造参数。可复用 Handle 保持抽象，最终接收端必须在派生状态销毁前同步 stop。测试适配器仅存在 tests，库不保留回调兼容入口。
 
 Windows MSVC / Qt 6.11.2：build-virtual-all 全模块 Release、公开头 /W4 /WX、CTest 13/13 通过。Linux GCC / Qt Core 6.8.3：ArchHFNL 的 virtual-upload-20261103/build-HandleCore 全模块构建及 CTest 13/13 通过。覆盖重连、关闭、串口一块多帧、Pcap 排队发送与虚拟执行；未运行 ARM 或真实硬件。运行逻辑不变；仅本地提交，尚未推送。
+
+## 2026-11-03 删除回调类型别名（用户定）
+
+删除 Sink、DataCallback，连接循环、串口成帧器、Pcap C 回调及仿真交付直接声明实际 std::function 类型；持有方式、同步借用与关闭顺序不变。Windows/MSVC/Qt 6.11.2 全模块 Release、公开头编译和 CTest 9/9 通过；Linux/GCC/Qt Core 6.8.3 全模块构建与 CTest 9/9 通过。Windows 日志 build-virtual-all/build-callback-alias.log 与 CTest LastTest.log；Linux 日志 virtual-upload-20261103/build-HandleCore/callback-alias-{build,test}.log。未操作硬件或更新 ARM。

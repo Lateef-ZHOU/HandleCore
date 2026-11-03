@@ -1,3 +1,4 @@
+#include <functional>
 #include "../CallbackHandle.h"
 #include <SerialHandle.h>
 #include <QCoreApplication>
@@ -5,7 +6,7 @@
 
 struct Bytes
 {
-    void feed(const QByteArray &chunk, RxTime at, const DataCallback &deliver) { deliver(chunk, at); }
+    void feed(const QByteArray &chunk, RxTime at, const std::function<void(const QByteArray &, RxTime)> &deliver) { deliver(chunk, at); }
 };
 class RawSerial : public SerialHandle<Bytes>
 {

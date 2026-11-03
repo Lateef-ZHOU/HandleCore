@@ -32,7 +32,7 @@ Makefiles 等单配置生成器在配置时加 `-DCMAKE_BUILD_TYPE=Release`。Wi
 - 参数直接使用模板参数 `ParamT`，连接直接使用 `ConnT`，不公开同义类型别名或另设参数 concept；默认构造、赋值和比较由实际使用处编译检查。`HandleLike` 仅从公开继承关系判断 Handle 族归属，不依赖子类提供别名。
 - 所属线程调用 `start(params)`、`send(payload)`、`stop()`，其他线程可观察 `isOpen()`。继承的 QThread 启停方法不替代 Handle 生命周期入口。
 - 默认构造，接收方派生并重写纯虚 `onData(const QByteArray &, RxTime)`，在收包线程同步执行。字节可能借用外部缓冲；异步留存者负责数据所有权，RxTime 可按值复制。
-- Handle 不再持有外部上传回调；内部 Sink 由私有静态 makeDispatch 在每轮 connLoop 前现场生成，不存固定派发闭包成员。虚拟云台将 Sink 移入 Qt 定时器槽，虚拟采集将结果交付函数移入连接；串口/Pcap 在同步收包栈上借用 Sink。接收方仍须遵守 stop 返回前退出在途回调的契约。
+- Handle 不再持有外部上传回调；内部连接循环回调 由私有静态 makeDispatch 在每轮 connLoop 前现场生成，不存固定派发闭包成员。虚拟云台将回调移入 Qt 定时器槽，虚拟采集将结果交付函数移入连接；串口/Pcap 在同步收包栈上借用回调。接收方仍须遵守 stop 返回前退出在途回调的契约。
 - 一次 `onRX` 产生一项裁决：Decode 上交一份数据，Reject 仅回发一份响应，Drop 无动作。`onTX` 的 Encode 交给 `connSend`，Drop 返回失败。
 - `RXRuling` / `TXRuling` 公开继承 `QByteArray`，自身就是字节产物，不另存 `payload`。动作以匿名枚举成员 `act` 声明，默认仍为 Drop；RX 另带 `at`。聚合初始化顺序为 `{bytes, RXRuling::Decode, at}` / `{bytes, TXRuling::Encode}`，默认 `{}` 仍丢弃；发送和上传直接借用其 QByteArray 基类，不增加字节拷贝。
 - 首次打开失败即退出；建立过连接后 I/O 失败仍按一秒间隔重连。每次打开前发 AboutToAcquire，发布可发送连接后发 Acquired，撤销观察口并释放工作线程份额后发 Released。打开失败不会伪造 Acquired/Released；自动重连的阶段也通知，但不发 AboutToRelease。上层通过实际状态判断是否重新配置。
@@ -52,7 +52,7 @@ Makefiles 等单配置生成器在配置时加 `-DCMAKE_BUILD_TYPE=Release`。Wi
 
 ## 固定回调所有权整理（2026-10-25 历史记录；外部上传现已改为虚函数）
 
-Handle 删除固定 dispatch_ 成员，以类内声明、类外定义的私有静态 makeDispatch 在每轮 connLoop 前生成 Sink；onData_ 仍是外部回调的实际持有者。SimGimbal 将一次性交出的 Sink 移入定时器槽。Serial/Pcap 的同步栈上适配、SimCard 的连接快照和结果交付成员各有实际使用期，保持原样。裁决函数体、start/send/stop、重连循环除工厂调用外均核对不变，不增加逐次收包转发或新的关闭机制。
+Handle 删除固定 dispatch_ 成员，以类内声明、类外定义的私有静态 makeDispatch 在每轮 connLoop 前生成回调；onData_ 仍是外部回调的实际持有者。SimGimbal 将一次性交出的回调 移入定时器槽。Serial/Pcap 的同步栈上适配、SimCard 的连接快照和结果交付成员各有实际使用期，保持原样。裁决函数体、start/send/stop、重连循环除工厂调用外均核对不变，不增加逐次收包转发或新的关闭机制。
 
 本地验证使用 ci/verify.cmake 的 all 配置：Windows x64 / MSVC 19.51 / Qt 6.11.2，Release /W4 /WX 构建零诊断，CTest **12/12（17.44 秒）**；Linux x86_64 / GCC 16.2.1 / Qt 6.8.3，严格警告构建零诊断，CTest **12/12（14.93 秒）**。包含收发裁决、重连、在途关闭、串口/Pcap 受控收发、两个仿真模块及参数约束负向编译；已有公共头独立编译随配置通过。
 
@@ -83,7 +83,7 @@ ctest --test-dir build-serial -C Release --output-on-failure
 Linux 使用单配置生成器时加 `-DCMAKE_BUILD_TYPE=Release`；自建 libserialport 可通过 `PKG_CONFIG_PATH=<前缀>/lib/pkgconfig` 查找。
 
 - `SerialHandle<Framer>` 实现四个连接接口；`onRX/onTX` 仍纯虚，具体协议必须重写。连接及日志通知同样由具体末端提供 Qt 信号，末端析构首先 stop。
-- `Framer` 是可默认构造的值对象，实现 `feed(const QByteArray &, RxTime, const DataCallback &)`。只在收包线程访问，随连接创建和销毁；一次读取同步交出 0..N 帧，之后每帧单独进入原有 RX 裁决。不得保存 deliver 或输入视图，不引入跨线程解析队列。
+- `Framer` 是可默认构造的值对象，实现 `feed(const QByteArray &, RxTime, const std::function<void(const QByteArray &, RxTime)> &)`。只在收包线程访问，随连接创建和销毁；一次读取同步交出 0..N 帧，之后每帧单独进入原有 RX 裁决。不得保存 deliver 或输入视图，不引入跨线程解析队列。
 - 协议成帧器在消费项目定义。库不包含 Pelco-D、设备地址、命令或校验规则；Windows 官邸和 Linux 桥接器可使用同一协议 Handle。
 - `SerialParams` 接收端口名/路径、正整数波特率、数据位、停止位、校验、流控及正的写超时。常用波特率枚举是 UI 选项，不限制连接值；默认 9600/8N1、无流控、500 ms。驱动不支持的设置使打开失败。0 写超时被拒绝，避免在本接口中变成无限等待。
 - 收块上限 256 字节、读取超时 100 ms 保持；RxTime 在读取返回后取得，是软件观测值。写口按连接互斥，允许收包线程 Reject 回包与所属线程主动发送，读取独立。短写/失败返 false，不整条自动重发；完整写入不代表远端设备执行成功。

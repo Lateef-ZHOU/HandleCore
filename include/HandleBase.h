@@ -14,9 +14,6 @@
 // 接收时刻按值交付；Qt 元类型与 QML 登记由使用方按需提供。
 using RxTime = std::chrono::system_clock::time_point;
 
-// 收包线程同步调用；字节可能借用底层缓冲，异步留存由接收方取得所有权。
-using DataCallback = std::function<void(const QByteArray &data, RxTime at)>;
-
 // 每次 onRX 只返回一个动作和一份产物；Decode 才使用 at。
 // Decode 上交数据，Reject 仅回发响应，Drop 不上交也不回发。
 struct RXRuling : QByteArray
@@ -49,8 +46,6 @@ template <typename ParamT, typename ConnT>
 class Handle : public QThread
 {
 public:
-    // connLoop 持有连接，同步交入每份字节及其接收时刻。
-    using Sink = std::function<void(std::shared_ptr<ConnT>, const QByteArray &, RxTime)>;
     Q_DISABLE_COPY(Handle)
 
     Handle() = default;
@@ -179,7 +174,9 @@ private:
     [[nodiscard]] virtual std::shared_ptr<ConnT> connOpen(const ParamT &params) = 0;
 
     // 工作线程阻塞收包：true 正常结束，false 表示 I/O 错误、需要重连。
-    [[nodiscard]] virtual bool connLoop(std::shared_ptr<ConnT> conn, Sink sink) = 0;
+    // 持有连接，同步交入每份字节及其接收时刻。
+    [[nodiscard]] virtual bool connLoop(std::shared_ptr<ConnT> conn,
+        std::function<void(std::shared_ptr<ConnT>, const QByteArray &, RxTime)> sink) = 0;
 
     // 所属线程打断收包并撤销待处理请求；打开期间/重连间隙可能传空连接。
     virtual void connBreak(std::shared_ptr<ConnT> h) const = 0;
@@ -193,7 +190,7 @@ private:
     [[nodiscard]] virtual TXRuling onTX(const QByteArray &payload, std::shared_ptr<ConnT> conn) const = 0;
 
     // 每轮收包生成派发回调，由 connLoop 接收；本层不保存固定闭包副本。
-    [[nodiscard]] static Sink makeDispatch(Handle *self);
+    [[nodiscard]] static std::function<void(std::shared_ptr<ConnT>, const QByteArray &, RxTime)> makeDispatch(Handle *self);
 
     // 停止请求跨打开/收包/重连等待保留，线程退出后由 stop 清空。
     QSemaphore stopGate_;
@@ -203,7 +200,8 @@ private:
 };
 
 template <typename ParamT, typename ConnT>
-typename Handle<ParamT, ConnT>::Sink Handle<ParamT, ConnT>::makeDispatch(Handle<ParamT, ConnT> *self)
+std::function<void(std::shared_ptr<ConnT>, const QByteArray &, RxTime)>
+Handle<ParamT, ConnT>::makeDispatch(Handle<ParamT, ConnT> *self)
 {
     return [self](std::shared_ptr<ConnT> conn, const QByteArray &raw, const RxTime at)
     {

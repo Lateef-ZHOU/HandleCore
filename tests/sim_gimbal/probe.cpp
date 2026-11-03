@@ -1,3 +1,4 @@
+#include <functional>
 #include "../CallbackHandle.h"
 #include <SimGimbalHandle.h>
 #include <QCoreApplication>
@@ -154,4 +155,4 @@ int main(int argc, char **argv)
 }
 
 static_assert(std::is_abstract_v<SimGimbalHandle>);
-static_assert(!std::is_constructible_v<SimGimbalHandle, DataCallback>);
+static_assert(!std::is_constructible_v<SimGimbalHandle, std::function<void(const QByteArray &, RxTime)>>);

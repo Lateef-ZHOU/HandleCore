@@ -1,3 +1,4 @@
+#include <functional>
 #include <HandleBase.h>
 
 #include <cstdio>
@@ -58,7 +59,7 @@ class CoreHandle final : public Handle<Params, Connection>
 {
     Q_OBJECT
 public:
-    CoreHandle(std::shared_ptr<State> state, DataCallback callback)
+    CoreHandle(std::shared_ptr<State> state, std::function<void(const QByteArray &, RxTime)> callback)
         : state_(std::move(state)), callback_(std::move(callback)) {}
     ~CoreHandle() override { stop(); }
 Q_SIGNALS:
@@ -78,7 +79,8 @@ private:
             return {};
         return std::make_shared<Connection>(state_);
     }
-    bool connLoop(std::shared_ptr<Connection> conn, Sink sink) override
+    bool connLoop(std::shared_ptr<Connection> conn,
+        std::function<void(std::shared_ptr<Connection>, const QByteArray &, RxTime)> sink) override
     {
         if (state_->retainConnection) state_->retainedConnection = conn;
         ++state_->loops;
@@ -122,7 +124,7 @@ private:
         return {QByteArray("tx:") + raw, TXRuling::Encode};
     }
     const std::shared_ptr<State> state_;
-    const DataCallback callback_;
+    const std::function<void(const QByteArray &, RxTime)> callback_;
 };
 
 static_assert(HandleLike<CoreHandle>);

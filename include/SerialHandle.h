@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <atomic>
 #include <chrono>
 #include <concepts>
@@ -12,7 +13,7 @@
 // 成帧器按值随连接创建；feed 同步交出 0..N 帧，不得保存 deliver 或输入视图。
 template <typename F>
 concept SerialFramer = std::default_initializable<F> && requires(
-    F &framer, const QByteArray &chunk, RxTime at, const DataCallback &deliver)
+    F &framer, const QByteArray &chunk, RxTime at, const std::function<void(const QByteArray &, RxTime)> &deliver)
 {
     { framer.feed(chunk, at, deliver) } -> std::same_as<void>;
 };
@@ -42,7 +43,7 @@ public:
     }
 
     // 收包线程：read_next 返回任意字节块；协议在同一调用内交完所有完整帧。
-    [[nodiscard]] bool receive(const DataCallback &deliver)
+    [[nodiscard]] bool receive(const std::function<void(const QByteArray &, RxTime)> &deliver)
     {
         char bytes[kChunkBytes];
         while (!break_.load(std::memory_order_relaxed))
@@ -111,7 +112,8 @@ private:
         return SerialConn<Framer>::open(params);
     }
 
-    [[nodiscard]] bool connLoop(std::shared_ptr<SerialConn<Framer>> conn, typename Base::Sink sink) final
+    [[nodiscard]] bool connLoop(std::shared_ptr<SerialConn<Framer>> conn,
+        std::function<void(std::shared_ptr<SerialConn<Framer>>, const QByteArray &, RxTime)> sink) final
     {
         return conn->receive([&conn, &sink](const QByteArray &frame, const RxTime at) { sink(conn, frame, at); });
     }

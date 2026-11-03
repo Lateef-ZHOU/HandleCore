@@ -40,7 +40,7 @@ public:
     explicit SimCardConn(const SimCardParams<Input> &p) : params(p) {}
     const SimCardParams<Input> params; // 所属线程只借用只读查询配置，不访问下面的工作状态。
 
-    void run(DataCallback deliver)
+    void run(std::function<void(const QByteArray &, RxTime)> deliver)
     {
         deliver_ = std::move(deliver);
         loop_.exec();
@@ -61,7 +61,7 @@ public:
 private:
     QEventLoop loop_;
     Generator generator_; // 构造、使用、销毁均在 Handle 工作线程，跨请求保留算法状态。
-    DataCallback deliver_; // 工作线程进入事件循环前设置，退出后撤销。
+    std::function<void(const QByteArray &, RxTime)> deliver_; // 工作线程进入事件循环前设置，退出后撤销。
 };
 
 // 所属线程固定累积窗口并计时，到点取快照；工作线程只执行合成器并交付字节。
@@ -115,7 +115,8 @@ private:
         return std::make_shared<SimCardConn<Generator>>(params);
     }
 
-    [[nodiscard]] bool connLoop(std::shared_ptr<SimCardConn<Generator>> connection, typename Base::Sink sink) final
+    [[nodiscard]] bool connLoop(std::shared_ptr<SimCardConn<Generator>> connection,
+        std::function<void(std::shared_ptr<SimCardConn<Generator>>, const QByteArray &, RxTime)> sink) final
     {
         connection->run([weak = std::weak_ptr(connection), sink = std::move(sink)](const QByteArray &frame, RxTime at) {
             if (const auto c = weak.lock()) sink(c, frame, at);

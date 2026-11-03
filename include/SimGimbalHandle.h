@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <chrono>
 #include <limits>
 #include <memory>
@@ -67,7 +68,8 @@ private:
     }
 
     // 句柄线程：起节拍、跑事件循环直到停机。节拍槽捕获弱份额（连接对象持定时器，定时器持槽，强份额会成环）。
-    [[nodiscard]] bool connLoop(std::shared_ptr<SimGimbalConn> conn, Sink sink) override
+    [[nodiscard]] bool connLoop(std::shared_ptr<SimGimbalConn> conn,
+        std::function<void(std::shared_ptr<SimGimbalConn>, const QByteArray &, RxTime)> sink) override
     {
         conn->last = std::chrono::steady_clock::now();
         QObject::connect(&conn->timer, &QTimer::timeout, conn.get(), [weak = std::weak_ptr(conn), sink = std::move(sink)] {

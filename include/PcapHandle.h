@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <atomic>
 #include <chrono>
 #include <memory>
@@ -74,9 +75,10 @@ private:
                                      params.devicePort, params.hostPort);
     }
 
-    [[nodiscard]] bool connLoop(std::shared_ptr<PcapConn> conn, Sink sink) override
+    [[nodiscard]] bool connLoop(std::shared_ptr<PcapConn> conn,
+        std::function<void(std::shared_ptr<PcapConn>, const QByteArray &, RxTime)> sink) override
     {
-        DataCallback feed = [&conn, &sink](const QByteArray &frame, RxTime at) { sink(conn, frame, at); };
+        std::function<void(const QByteArray &, RxTime)> feed = [&conn, &sink](const QByteArray &frame, RxTime at) { sink(conn, frame, at); };
         return pcap_loop(conn->p, -1, onPacket, reinterpret_cast<u_char *>(&feed)) == PCAP_ERROR_BREAK;
     }
 
@@ -115,7 +117,7 @@ private:
     {
         if (header->caplen != header->len) return;
         const auto view = QByteArray::fromRawData(reinterpret_cast<const char *>(packet), header->caplen);
-        (*reinterpret_cast<DataCallback *>(user))(view,
+        (*reinterpret_cast<std::function<void(const QByteArray &, RxTime)> *>(user))(view,
             std::chrono::system_clock::from_time_t(header->ts.tv_sec) +
             std::chrono::microseconds{header->ts.tv_usec});
     }
