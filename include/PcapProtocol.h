@@ -96,12 +96,6 @@ public:
         return IPv4(QByteArray(bytes, Size));
     }
 
-    [[nodiscard]] QString toString() const
-    {
-        const auto *b = reinterpret_cast<const unsigned char *>(constData());
-        return QString::asprintf("%u.%u.%u.%u", b[0], b[1], b[2], b[3]);
-    }
-
 private:
     // 定长纪律的兜底：四字节不足/超出即调用方编程错误。
     [[nodiscard]] static QByteArray checked(QByteArray bytes)

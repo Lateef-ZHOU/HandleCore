@@ -154,3 +154,7 @@ Windows MSVC / Qt 6.11.2：build-virtual-all 全模块 Release、公开头 /W4 /
 ## 2026-11-03 删除回调类型别名（用户定）
 
 删除 Sink、DataCallback，连接循环、串口成帧器、Pcap C 回调及仿真交付直接声明实际 std::function 类型；持有方式、同步借用与关闭顺序不变。Windows/MSVC/Qt 6.11.2 全模块 Release、公开头编译和 CTest 9/9 通过；Linux/GCC/Qt Core 6.8.3 全模块构建与 CTest 9/9 通过。Windows 日志 build-virtual-all/build-callback-alias.log 与 CTest LastTest.log；Linux 日志 virtual-upload-20261103/build-HandleCore/callback-alias-{build,test}.log。未操作硬件或更新 ARM。
+
+## 2026-11-03 移除无调用方的 IPv4 文本转换
+
+删除 IPv4::toString；MAC::toString 仍供校验验证使用，地址解析、网卡枚举与协议逻辑保持。Windows build-virtual-all 增量构建成功，CTest 9/9（12.58 秒），日志 build-network-ui.log / test-network-ui.log；主程序构建与八秒冒烟通过。未运行 Linux 或硬件验证。
