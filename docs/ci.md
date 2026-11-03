@@ -1,5 +1,12 @@
 # CI 与本地复现
 
+## 2026-11-03：删除串口发送互斥（用户定）
+
+删除 SerialConn::send 的 lock_guard、writeGate_ 成员与 mutex 头文件。主动发送及 HandleBase 排队的 Reject 回复均由所属主线程串行执行，不再保留连接级写锁；收包、重连、关闭和发送结果判断保持。当前契约与维护约束已同步，下方写互斥记录为历史。
+
+Windows/MSVC/Qt 6.11.2 增量全模块 Release、公开头编译与 CTest 9/9（12.51 秒）通过，无 C++ 编译诊断。既有串口验证覆盖排队回复不在 worker 发送、发送串行、重连及关闭。证据 build-virtual-all/{build,test}-serial-no-lock.log。未测 Linux、ARM 或硬件，未推送。
+
+
 ## 2026-11-03：串口发送只返回成功与否（用户定）
 
 删除 send 的错误输出参数；完整写入返回 true，短写和底层错误返回 false，由 Handle 统一记录一次“串口发送失败”。不返回或缓存错误详情，替代下方上一轮的详细诊断接口；收发、重连与关闭逻辑保持。

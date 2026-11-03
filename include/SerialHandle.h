@@ -4,7 +4,6 @@
 #include <chrono>
 #include <concepts>
 #include <memory>
-#include <mutex>
 #include <QByteArray>
 #include <QString>
 
@@ -64,11 +63,10 @@ public:
 
     void breakLoop() noexcept { break_.store(true, std::memory_order_relaxed); }
 
-    // 主动发送与 HandleBase 排队的 Reject 回包共用所属线程写口；保留连接级写互斥。
+    // 主动发送与 HandleBase 排队的 Reject 回包均在所属主线程串行执行。
     // 完整写入才成功，短写或底层错误统一返回 false。
     [[nodiscard]] bool send(const QByteArray &data)
     {
-        const std::lock_guard lock(writeGate_);
         const int written = sp_blocking_write(port_, data.constData(), static_cast<size_t>(data.size()), writeTimeoutMs_);
         return written == data.size();
     }
@@ -90,7 +88,6 @@ private:
     sp_port *const port_;
     const unsigned writeTimeoutMs_;
     std::atomic<bool> break_{false};
-    std::mutex writeGate_;
     Framer framer_; // 仅收包线程访问；连接释放即清除协议缓冲和时间记录。
 };
 
