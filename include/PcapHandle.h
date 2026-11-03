@@ -139,7 +139,6 @@ private:
         if (conn->deviceMAC.isNull())
         {
             conn->pending = payload;
-            conn->pending.detach(); // 调用方可能交入借用视图，待 ARP 回应时仍须有效。
             Q_EMIT logMessage("对端 MAC 未知，报文已暂存，正在探测");
             return {ARPRequest(conn->params.host.macAddress, conn->params.hostIPv4, conn->params.deviceIPv4), TXRuling::Encode};
         }

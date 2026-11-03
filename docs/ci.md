@@ -1,5 +1,12 @@
 # CI 与本地复现
 
+## 2026-11-03：主线程下发保持隐式共享（用户定）
+
+删除 pending.detach()；主线程下发须提供可按 QByteArray 值语义保活的数据，pending 直接共享。worker 借用接收缓冲跨线程投递时取得所有权，HandleBase 的 Reject 排队前 r.detach() 保留；不增加所有权检测或状态。替代下方上一轮 pending 接受临时借用源的契约。
+
+Windows/MSVC/Qt 6.11.2 全模块 Release、公开头编译与 CTest 9/9（12.56 秒）通过，无 C++ 编译诊断。pending 验证检查发送后源数组仍共享、随后源数组改写不影响补发；worker 回复借用缓冲复用的既有验证继续通过。证据 build-virtual-all/{build,test}-pending-share.log。未测 Linux、ARM 或硬件，未推送。
+
+
 ## 2026-11-03 ARP 状态归所属线程（用户定）
 
 PcapConn 扁平保存 deviceMAC 与 pending，删除 ArpState、原子共享指针和 CAS。连接发布前初始化 MAC 种子；发布后发送、MAC 学习和 pending 补发均在所属线程。worker 仅解析 ARP 回应并捕获原连接/MAC 投递；未知 MAC 时保留最新报文并 detach 字节，学习后取空补发，重复回应不重复发送。原连接保活、停止/重连后原连接队列继续执行及析构移除队列项的裁定保持，HandleBase 不改。

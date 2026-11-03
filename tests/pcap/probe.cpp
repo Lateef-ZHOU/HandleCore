@@ -147,7 +147,8 @@ void ownerArpLearning()
     FakePcap::inject(s, reply);
     until([&] { return s->delivered == 1; }, false);
     QByteArray source("latest");
-    require(h.send(QByteArray::fromRawData(source.constData(), source.size())), "pending replacement rejected");
+    require(h.send(source), "pending replacement rejected");
+    require(!source.isDetached(), "pending unnecessarily deep-copied the owning payload");
     require(FakePcap::sent().size() == 2
             && kindOf(FakePcap::sent().back().bytes) == FrameKind::ARPRequest,
             "worker learned MAC before owner processed the event");
