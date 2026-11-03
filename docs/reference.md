@@ -82,7 +82,7 @@ ctest --test-dir build-serial -C Release --output-on-failure
 
 Linux 使用单配置生成器时加 `-DCMAKE_BUILD_TYPE=Release`；自建 libserialport 可通过 `PKG_CONFIG_PATH=<前缀>/lib/pkgconfig` 查找。
 
-- `SerialHandle<Framer>` 实现四个连接接口；`onRX/onTX` 仍纯虚，具体协议必须重写。连接及日志通知同样由具体末端提供 Qt 信号，末端析构首先 stop。
+- `SerialHandle<Framer>` 不声明构造转发或 Base 同义别名；`connLoop` 调用连接的 `loop(deliver)`，与 `breakLoop()` 对应，名称与 Pcap 的接收 loop 一致。实现四个连接接口；`onRX/onTX` 仍纯虚，具体协议必须重写。连接及日志通知同样由具体末端提供 Qt 信号，末端析构首先 stop。
 - `Framer` 是可默认构造的值对象，实现 `feed(const QByteArray &, RxTime, const std::function<void(const QByteArray &, RxTime)> &)`。只在收包线程访问，随连接创建和销毁；一次读取同步交出 0..N 帧，之后每帧单独进入原有 RX 裁决。不得保存 deliver 或输入视图，不引入跨线程解析队列。
 - 协议成帧器在消费项目定义。库不包含 Pelco-D、设备地址、命令或校验规则；Windows 官邸和 Linux 桥接器可使用同一协议 Handle。
 - `SerialParams` 接收端口名/路径、正整数波特率、数据位、停止位、校验、流控及正的写超时。常用波特率枚举是 UI 选项，不限制连接值；默认 9600/8N1、无流控、500 ms。驱动不支持的设置使打开失败。0 写超时被拒绝，避免在本接口中变成无限等待。

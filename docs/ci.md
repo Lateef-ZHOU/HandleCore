@@ -1,5 +1,12 @@
 # CI 与本地复现
 
+## 2026-11-03：串口接收循环命名整理（用户定）
+
+删除 SerialHandle 的 Base 同义别名及继承构造声明，沿用隐式默认构造；SerialConn 的接收循环统一命名 loop，与 breakLoop 对应。connLoop 同步调用点已更新，接收、成帧、发送及关闭行为不变。
+
+Windows/MSVC/Qt 6.11.2 全模块 Release、公开头编译和 CTest 9/9（12.52 秒）通过，无 C++ 编译诊断，包含串口半帧/多帧、排队回复、重连与关闭用例。证据 build-virtual-all/{build,test}-serial-loop.log。未测 Linux、ARM 或硬件，未推送。
+
+
 ## 2026-11-03：资源枚举合入 HandleBase（用户定）
 
 ResourcePhase 及 Qt namespace/元类型登记移入 HandleBase.h 的模板外部，删除独立头与构建引用；静态 Core 目标仍唯一生成元对象，枚举名称、数值及阶段行为保持。单头编译只保留 HandleBase，核心探针新增命名空间与四个枚举值的元对象检查。

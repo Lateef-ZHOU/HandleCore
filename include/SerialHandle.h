@@ -43,7 +43,7 @@ public:
     }
 
     // 收包线程：read_next 返回任意字节块；协议在同一调用内交完所有完整帧。
-    [[nodiscard]] bool receive(const std::function<void(const QByteArray &, RxTime)> &deliver)
+    [[nodiscard]] bool loop(const std::function<void(const QByteArray &, RxTime)> &deliver)
     {
         char bytes[kChunkBytes];
         while (!break_.load(std::memory_order_relaxed))
@@ -95,10 +95,6 @@ private:
 template <SerialFramer Framer>
 class SerialHandle : public Handle<SerialParams, SerialConn<Framer>>
 {
-    using Base = Handle<SerialParams, SerialConn<Framer>>;
-public:
-    using Base::Base;
-
 protected:
     ~SerialHandle() override = default;
     [[nodiscard]] virtual RXRuling onRX(const QByteArray &frame, RxTime at,
@@ -115,7 +111,7 @@ private:
     [[nodiscard]] bool connLoop(std::shared_ptr<SerialConn<Framer>> conn,
         std::function<void(std::shared_ptr<SerialConn<Framer>>, const QByteArray &, RxTime)> sink) final
     {
-        return conn->receive([&conn, &sink](const QByteArray &frame, const RxTime at) { sink(conn, frame, at); });
+        return conn->loop([&conn, &sink](const QByteArray &frame, const RxTime at) { sink(conn, frame, at); });
     }
 
     void connBreak(std::shared_ptr<SerialConn<Framer>> conn) const final
