@@ -1,5 +1,11 @@
 # CI 与本地复现
 
+## 2026-11-03 裁决值与参数接口整理
+
+RXRuling/TXRuling 继承 QByteArray，动作使用匿名枚举成员，删除 payload；调用处改为字节在前的聚合初始化。删除 HandleParameters、ParamType/ConnType 及四项只针对旧参数 concept 的负向编译测试，具体传输直接使用实际类型，HandleLike 仅检查公开继承关系。
+
+Windows MSVC / Qt 6.11.2 全模块 Release、独立头编译及 CTest 9/9 通过；Linux GCC / Qt Core 6.8.3 同样 9/9 通过。现有收发裁决、串口/Pcap、仿真、重连与关闭测试保留，运行策略未变。Windows 证据为 build-virtual-all/ruling-final-{build,test}.log；Linux 为 virtual-upload-20261103/ruling-final-HandleCore-{build,test}.log。仅本地验证，无硬件操作或推送。
+
 ## 2026-10-31：移除 CDL5 临时接收长度日志
 
 - 用户提供实采截图确认主程序日志为捕获 7210 字节、上交 UDP 载荷 7168 字节；这次是运行中的 Handle 交付日志，而非离线回放或 Wireshark 显示。按要求删除临时日志、55200 端口判断和局部诊断代码，PcapHandle 与已发布 3470a1d 逐字一致；接收逻辑不变。
@@ -43,7 +49,7 @@ cmake "-DBUILD_ROOT=<构建目录>" "-DPREFIX_PATH=<Qt 前缀>;<libserialport �
 
 入口逐项配置、构建和 CTest，任一步失败即返回失败；core 不传模块开关，从实际缓存核对四个默认值都为 OFF。其他配置显式关闭无关模块，避免缓存遗留开启额外依赖。每项配置内的 configure.log / build.log / test.log / junit.xml 保存结果。修改模块或依赖布局时使用新的 BUILD_ROOT；不删除现有构建目录。
 
-现有测试包含参数约束拒编、受控 I/O、实际库枚举/离线协议、线程归属、重连及同步关闭；不打开真实设备。独立库验证不替代使用方应用回归，不声称 ARM 或实物硬件已经通过。
+现有测试包含受控 I/O、实际库枚举/离线协议、线程归属、重连及同步关闭；不打开真实设备。独立库验证不替代使用方应用回归，不声称 ARM 或实物硬件已经通过。
 
 ## 发布前本地验证（2026-10-24）
 

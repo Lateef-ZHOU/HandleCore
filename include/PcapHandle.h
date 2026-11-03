@@ -125,9 +125,9 @@ private:
         switch (kindOf(raw)) // conn 因果必非空（句柄→loop→dispatch），本口自解不判
         {
         case FrameKind::UDPDatagram:
-            return {RXRuling::Decode, UDPDatagram(raw).bodyView(), at};
+            return {UDPDatagram(raw).bodyView(), RXRuling::Decode, at};
         case FrameKind::ARPRequest:
-            return {RXRuling::Reject, ARPReply(ARPRequest(raw), conn->params.host.macAddress)};
+            return {ARPReply(ARPRequest(raw), conn->params.host.macAddress), RXRuling::Reject};
         case FrameKind::ARPReply:
         {
             const ARPReply reply(raw);
@@ -137,9 +137,9 @@ private:
             const auto old = conn->arp.exchange(std::make_shared<const ArpState>(mac, QByteArray{}));
             if (!old || old->pending.isEmpty())
                 return {}; // 纯学习，无挂起报文
-            return {RXRuling::Reject,
-                    UDPDatagram(mac, conn->params.host.macAddress, conn->params.hostIPv4, conn->params.deviceIPv4,
-                                conn->params.hostPort, conn->params.devicePort, old->pending)};
+            return {UDPDatagram(mac, conn->params.host.macAddress, conn->params.hostIPv4, conn->params.deviceIPv4,
+                                conn->params.hostPort, conn->params.devicePort, old->pending),
+                    RXRuling::Reject};
         }
         default:
             return {}; // 完备性兜底：不认识的种类 / 结构长度不足 / 垫底帧——Drop
@@ -155,18 +155,18 @@ private:
         }
         auto s = conn->arp.load();
         if (s && !s->deviceMAC.isNull()) // 对端 MAC 已知：直接组 UDP
-            return {TXRuling::Encode,
-                    UDPDatagram(s->deviceMAC, conn->params.host.macAddress, conn->params.hostIPv4, conn->params.deviceIPv4,
-                                conn->params.hostPort, conn->params.devicePort, payload)};
+            return {UDPDatagram(s->deviceMAC, conn->params.host.macAddress, conn->params.hostIPv4, conn->params.deviceIPv4,
+                                conn->params.hostPort, conn->params.devicePort, payload),
+                    TXRuling::Encode};
         const auto stash = std::make_shared<const ArpState>(MAC{}, payload);
         if (conn->arp.compare_exchange_strong(s, stash))
         {
             Q_EMIT logMessage("对端 MAC 未知，报文已暂存，正在探测");
-            return {TXRuling::Encode, ARPRequest(conn->params.host.macAddress, conn->params.hostIPv4, conn->params.deviceIPv4)};
+            return {ARPRequest(conn->params.host.macAddress, conn->params.hostIPv4, conn->params.deviceIPv4), TXRuling::Encode};
         }
-        return {TXRuling::Encode,
-                UDPDatagram(s->deviceMAC, conn->params.host.macAddress, conn->params.hostIPv4, conn->params.deviceIPv4,
-                            conn->params.hostPort, conn->params.devicePort, payload)};
+        return {UDPDatagram(s->deviceMAC, conn->params.host.macAddress, conn->params.hostIPv4, conn->params.deviceIPv4,
+                            conn->params.hostPort, conn->params.devicePort, payload),
+                TXRuling::Encode};
     }
 };
 

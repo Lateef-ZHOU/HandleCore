@@ -97,33 +97,32 @@ class SerialHandle : public Handle<SerialParams, SerialConn<Framer>>
     using Base = Handle<SerialParams, SerialConn<Framer>>;
 public:
     using Base::Base;
-    using typename Base::ConnType;
 
 protected:
     ~SerialHandle() override = default;
     [[nodiscard]] virtual RXRuling onRX(const QByteArray &frame, RxTime at,
-                                       std::shared_ptr<ConnType> conn) override = 0;
+                                       std::shared_ptr<SerialConn<Framer>> conn) override = 0;
     [[nodiscard]] virtual TXRuling onTX(const QByteArray &payload,
-                                       std::shared_ptr<ConnType> conn) const override = 0;
+                                       std::shared_ptr<SerialConn<Framer>> conn) const override = 0;
 
 private:
-    [[nodiscard]] std::shared_ptr<ConnType> connOpen(const SerialParams &params) final
+    [[nodiscard]] std::shared_ptr<SerialConn<Framer>> connOpen(const SerialParams &params) final
     {
-        return ConnType::open(params);
+        return SerialConn<Framer>::open(params);
     }
 
-    [[nodiscard]] bool connLoop(std::shared_ptr<ConnType> conn, typename Base::Sink sink) final
+    [[nodiscard]] bool connLoop(std::shared_ptr<SerialConn<Framer>> conn, typename Base::Sink sink) final
     {
         return conn->receive([&conn, &sink](const QByteArray &frame, const RxTime at) { sink(conn, frame, at); });
     }
 
-    void connBreak(std::shared_ptr<ConnType> conn) const final
+    void connBreak(std::shared_ptr<SerialConn<Framer>> conn) const final
     {
         if (conn)
             conn->breakLoop();
     }
 
-    [[nodiscard]] bool connSend(std::shared_ptr<ConnType> conn, const QByteArray &data) const final
+    [[nodiscard]] bool connSend(std::shared_ptr<SerialConn<Framer>> conn, const QByteArray &data) const final
     {
         if (!conn)
         {

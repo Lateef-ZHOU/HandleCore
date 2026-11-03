@@ -114,16 +114,6 @@ if(WIN32)
         ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>")
 endif()
 
-foreach(case RANGE 1 4)
-    add_library(handle_reject_${case} OBJECT EXCLUDE_FROM_ALL invalid_params.cpp)
-    target_link_libraries(handle_reject_${case} PRIVATE Lidar::HandleCore)
-    target_compile_definitions(handle_reject_${case} PRIVATE INVALID_PARAM_CASE=${case})
-    add_test(NAME handle_reject_${case} COMMAND "${CMAKE_COMMAND}"
-        "-DBUILD_DIR=${CMAKE_BINARY_DIR}" "-DCONFIG=$<CONFIG>" "-DCASE=${case}"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_rejection.cmake")
-    set_tests_properties(handle_reject_${case} PROPERTIES TIMEOUT 60 RUN_SERIAL TRUE)
-endforeach()
-
 if(HANDLECORE_WITH_SERIAL)
     add_executable(serial_probe serial/probe.cpp serial/FakeSerialPort.cpp)
     add_executable(serial_link_probe serial/link_probe.cpp)

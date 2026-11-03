@@ -45,15 +45,15 @@ Q_SIGNALS:
     void connectionChanged(HandleCore::ResourcePhase) override;
     void logMessage(const QString &) const override;
 private:
-    RXRuling onRX(const QByteArray &frame, RxTime at, std::shared_ptr<ConnType>) override
+    RXRuling onRX(const QByteArray &frame, RxTime at, std::shared_ptr<SerialConn<Lines>>) override
     {
-        if (frame == "reject") return {RXRuling::Reject, "ack", {}};
+        if (frame == "reject") return {"ack", RXRuling::Reject, {}};
         if (frame == "drop") return {};
-        return {RXRuling::Decode, frame, at};
+        return {frame, RXRuling::Decode, at};
     }
-    TXRuling onTX(const QByteArray &payload, std::shared_ptr<ConnType>) const override
+    TXRuling onTX(const QByteArray &payload, std::shared_ptr<SerialConn<Lines>>) const override
     {
-        return payload == "drop" ? TXRuling{} : TXRuling{TXRuling::Encode, payload};
+        return payload == "drop" ? TXRuling{} : TXRuling{payload, TXRuling::Encode};
     }
 };
 
@@ -62,14 +62,14 @@ class MissingRX : public SerialHandle<Lines>
     void onData(const QByteArray &, RxTime) override {}
     void connectionChanged(HandleCore::ResourcePhase) override {}
     void logMessage(const QString &) const override {}
-    TXRuling onTX(const QByteArray &, std::shared_ptr<ConnType>) const override { return {}; }
+    TXRuling onTX(const QByteArray &, std::shared_ptr<SerialConn<Lines>>) const override { return {}; }
 };
 class MissingTX : public SerialHandle<Lines>
 {
     void onData(const QByteArray &, RxTime) override {}
     void connectionChanged(HandleCore::ResourcePhase) override {}
     void logMessage(const QString &) const override {}
-    RXRuling onRX(const QByteArray &, RxTime, std::shared_ptr<ConnType>) override { return {}; }
+    RXRuling onRX(const QByteArray &, RxTime, std::shared_ptr<SerialConn<Lines>>) override { return {}; }
 };
 static_assert(std::is_abstract_v<SerialHandle<Lines>> && std::is_abstract_v<MissingRX> && std::is_abstract_v<MissingTX>);
 static_assert(HandleLike<LineHandle>);

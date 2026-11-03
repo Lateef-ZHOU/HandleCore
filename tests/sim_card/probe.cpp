@@ -81,7 +81,6 @@ Q_SIGNALS:
     void connectionChanged(HandleCore::ResourcePhase connected) override;
     void logMessage(const QString &text) const final;
 };
-using Params = ProbeHandle::ParamType;
 using Command = SimCardWire::Command;
 static QByteArray command(Command::Kind kind, quint64 id, int secs = 1)
 { return SimCardWire::encode(Command{kind, secs, id}); }
@@ -105,7 +104,7 @@ static void windowsAndState()
     require(!handle.isOpen() && frames == 0, "missing capture created a working connection");
     require(!handle.send(command(Command::Stop, 1)), "offline send accepted");
     RxTime capturedBegin{}, capturedEnd{};
-    Params params;
+    SimCardParams<Generator::Input> params;
     params.sourceKey = "source-A";
     params.capture = [&](RxTime begin, RxTime end) -> std::optional<Input> {
         require(QThread::currentThread() == owner, "capture ran on worker");
@@ -138,7 +137,7 @@ static void windowsAndState()
         require(read<quint64>(received) == 13 && read<int>(received, 8) == 2,
                 "generator recreated between requests");
     }
-    Params same = params;
+    SimCardParams<Generator::Input> same = params;
     same.capture = [](RxTime, RxTime) -> std::optional<Input> { return {}; };
     require(!handle.start(same), "same source should not replace capture or reset connection");
     handle.stop();
@@ -174,7 +173,7 @@ static void shutdown()
     auto handle = std::make_unique<CallbackHandle<ProbeHandle>>([&](const QByteArray &frame, RxTime) {
         deliveredId = read<quint64>(frame); delivered = true;
     });
-    Params params;
+    SimCardParams<Generator::Input> params;
     params.sourceKey = "blocking";
     params.capture = [&](RxTime, RxTime) -> std::optional<Input> {
         ++queries; Input input; input.entered = &entered; input.release = &release; return input;
@@ -190,7 +189,7 @@ static void shutdown()
     for (int i = 0; i < 40; ++i)
     {
         CallbackHandle<ProbeHandle> immediate([](const QByteArray &, RxTime) {});
-        Params p; p.capture = [](RxTime, RxTime) -> std::optional<Input> { return {}; };
+        SimCardParams<Generator::Input> p; p.capture = [](RxTime, RxTime) -> std::optional<Input> { return {}; };
         require(immediate.start(p), "immediate start"); immediate.stop();
         require(!immediate.isOpen() && !immediate.isRunning(), "open/stop did not finish");
     }

@@ -149,10 +149,10 @@ private:
 
     [[nodiscard]] RXRuling onRX(const QByteArray &raw, const RxTime at, std::shared_ptr<SimGimbalConn>) override
     {
-        return {RXRuling::Decode, raw, at};
+        return {raw, RXRuling::Decode, at};
     }
     [[nodiscard]] TXRuling onTX(const QByteArray &payload, std::shared_ptr<SimGimbalConn>) const override
     {
-        return {TXRuling::Encode, payload};
+        return {payload, TXRuling::Encode};
     }
 };

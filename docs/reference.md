@@ -29,11 +29,12 @@ Makefiles 等单配置生成器在配置时加 `-DCMAKE_BUILD_TYPE=Release`。Wi
 
 ## 当前接口契约
 
-- `HandleParameters` 要求参数可默认构造、可从 const 引用赋值，且 `current != incoming` 可用于条件。不要求复制构造、赋值返回引用或完整相等运算集合。
+- 参数直接使用模板参数 `ParamT`，连接直接使用 `ConnT`，不公开同义类型别名或另设参数 concept；默认构造、赋值和比较由实际使用处编译检查。`HandleLike` 仅从公开继承关系判断 Handle 族归属，不依赖子类提供别名。
 - 所属线程调用 `start(params)`、`send(payload)`、`stop()`，其他线程可观察 `isOpen()`。继承的 QThread 启停方法不替代 Handle 生命周期入口。
 - 默认构造，接收方派生并重写纯虚 `onData(const QByteArray &, RxTime)`，在收包线程同步执行。字节可能借用外部缓冲；异步留存者负责数据所有权，RxTime 可按值复制。
 - Handle 不再持有外部上传回调；内部 Sink 由私有静态 makeDispatch 在每轮 connLoop 前现场生成，不存固定派发闭包成员。虚拟云台将 Sink 移入 Qt 定时器槽，虚拟采集将结果交付函数移入连接；串口/Pcap 在同步收包栈上借用 Sink。接收方仍须遵守 stop 返回前退出在途回调的契约。
-- 一次 `onRX` 产生一项裁决：Decode 上交一份数据，Reject 仅回发一份响应，Drop 无动作。`onTX` 的 Encode 交给 `connSend`，Drop 返回失败。接口及行为未扩展。
+- 一次 `onRX` 产生一项裁决：Decode 上交一份数据，Reject 仅回发一份响应，Drop 无动作。`onTX` 的 Encode 交给 `connSend`，Drop 返回失败。
+- `RXRuling` / `TXRuling` 公开继承 `QByteArray`，自身就是字节产物，不另存 `payload`。动作以匿名枚举成员 `act` 声明，默认仍为 Drop；RX 另带 `at`。聚合初始化顺序为 `{bytes, RXRuling::Decode, at}` / `{bytes, TXRuling::Encode}`，默认 `{}` 仍丢弃；发送和上传直接借用其 QByteArray 基类，不增加字节拷贝。
 - 首次打开失败即退出；建立过连接后 I/O 失败仍按一秒间隔重连。每次打开前发 AboutToAcquire，发布可发送连接后发 Acquired，撤销观察口并释放工作线程份额后发 Released。打开失败不会伪造 Acquired/Released；自动重连的阶段也通知，但不发 AboutToRelease。上层通过实际状态判断是否重新配置。
 - `stop()` 在所属线程先同步发 connectionChanged(ResourcePhase::AboutToRelease)，接收方可在促断前尝试收尾发送；随后记录停止请求、促断并等待收包与同步回调退出。重复 stop 不重复通知；首次打开失败已退出后调用 stop 不通知。打开中/重连间隙关闭仍通知，但发送可能失败，失败不阻止关闭。
 - AboutToRelease 是主动关闭前的收尾窗口，此时 isOpen 可能为真；stop 返回保证收包退出并撤销连接观察口。收尾槽不得递归 start/stop、泵事件或销毁 Handle，强制排队的槽不享有同步保证。其余阶段来自 worker，可能排队；Acquired/Released 仅通知回读实际状态，不能据旧事件撤单或推断当前连接。外部仍持有旧连接份额也不能让 isOpen/send 继续使用它。
@@ -45,7 +46,7 @@ Makefiles 等单配置生成器在配置时加 `-DCMAKE_BUILD_TYPE=Release`。Wi
 
 `handle_core` 使用 QCoreApplication 和受控传输，不访问实物：检查字节/时间交付、三种 RX 与两种 TX 裁决、发送失败、Qt 信号回所属线程、重复关闭、回调期间关闭、打开期间关闭、首次连接失败及后续重连。屏障用于确定执行次序，测试超时仅防止测试挂起，不改变生产等待行为。
 
-四项负向编译测试分别拒绝缺少默认构造、const 赋值、比较运算和比较不能用于条件的参数。另有正向检查确保不要求多余的复制构造或隐式 bool 转换。
+参数 concept 及其四项专属负向编译测试已删除；收发裁决、线程和关闭行为仍由运行验证覆盖。
 
 主程序四件套和既有设备生命周期验证仍使用原入口；独立测试不替代硬件验证。
 
@@ -150,7 +151,7 @@ ctest --test-dir build-sim-card -C Release --output-on-failure
 Linux 单配置生成器加 `-DCMAKE_BUILD_TYPE=Release`。调用方以 `SimCardHandle<Generator>` 派生具体末端，提供 Qt 信号并在析构首句同步 `stop()`，启用 AUTOMOC。模板不含 Q_OBJECT，也不要求输入快照登记 Qt 元类型。
 
 - `Generator` 提供 `using Input = ...` 和 `QByteArray synthesize(quint64 requestId, RxTime begin, RxTime end, const Input &)`。concept 要求默认构造及准确返回类型；Input 可移动即可，合成器无需可复制或移动。合成器按值放在连接中，在工作线程构造、连续使用、销毁，不能每次请求重建；随机数等算法状态随连接保持。重连会建立新的合成器。
-- `ParamType` 即 `SimCardParams<Input>`：`sourceKey` 表示数据源身份，`capture(begin,end)` 在所属线程同步返回 `optional<Input>`。相等比较只看 sourceKey；已连接且同 key 的 start 不替换查询函数，换源用新 key 或先 stop。缺少 capture 在打开时失败；回调所借用的对象必须存活到 stop 返回，输入须自持快照，后台不能回访 UI。
+- `SimCardParams<Input>`：`sourceKey` 表示数据源身份，`capture(begin,end)` 在所属线程同步返回 `optional<Input>`。相等比较只看 sourceKey；已连接且同 key 的 start 不替换查询函数，换源用新 key 或先 stop。缺少 capture 在打开时失败；回调所借用的对象必须存活到 stop 返回，输入须自持快照，后台不能回访 UI。
 - 收到 Accumulate 即固定 system_clock 起止窗口，用所属线程单发 PreciseTimer 等待，到点取数；界面忙导致迟到时仍查询原窗口。累积秒数须为 1..INT_MAX/1000。快照移动进绑定原连接 QObject 的排队闭包，worker 调用合成器，非空结果按原请求窗口结束时刻交付。库不认识风场、角度、采样算法或输出谱布局；请求号与具体输出字节的关联由合成器落实。
 - `nullopt` 不启动合成，空 QByteArray 不交付，两者均静默。Stop 仅撤销请求号匹配的待计时请求，旧 Stop 不影响新请求。已经进入后台的工作保持原请求号，可完成交付，由应用 Collector 拒绝过期结果；不新增取消令牌、阻塞取数、超时或排空。
 - 同步关闭先撤 timer/pending，再向原连接队列投递退出并等待工作线程；排队闭包不强持连接、不借新连接。HandleBase 的首连失败、重连、RX/TX 与关闭机制未改。`SimCardWire::Command` 保留原生 POD 布局和 Accumulate/Stop，编解码仅接受 Command 和结果头的 quint64 请求号；它是进程内部协议，不作为跨 ABI 网络协议。

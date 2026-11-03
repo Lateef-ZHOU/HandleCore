@@ -13,18 +13,6 @@
 
 static_assert(std::same_as<RxTime, std::chrono::system_clock::time_point>);
 
-// 只可赋值、不允许复制构造；比较可用于条件但不隐式转换为 bool。
-// 防止 concept 施加基类并不需要的 copyable/equality_comparable 要求。
-struct Condition { explicit operator bool() const { return false; } };
-struct AssignOnlyParams
-{
-    AssignOnlyParams() = default;
-    AssignOnlyParams(const AssignOnlyParams &) = delete;
-    void operator=(const AssignOnlyParams &) {}
-    Condition operator!=(const AssignOnlyParams &) const { return {}; }
-};
-static_assert(HandleParameters<AssignOnlyParams>);
-
 void require(bool value, const char *message)
 {
     if (!value)
@@ -122,16 +110,16 @@ private:
     RXRuling onRX(const QByteArray &raw, RxTime at, std::shared_ptr<Connection>) override
     {
         if (raw == "reply")
-            return {RXRuling::Reject, QByteArray("response"), {}};
+            return {QByteArray("response"), RXRuling::Reject, {}};
         if (raw == "drop")
             return {};
-        return {RXRuling::Decode, raw, at};
+        return {raw, RXRuling::Decode, at};
     }
     TXRuling onTX(const QByteArray &raw, std::shared_ptr<Connection>) const override
     {
         if (raw == "drop")
             return {};
-        return {TXRuling::Encode, QByteArray("tx:") + raw};
+        return {QByteArray("tx:") + raw, TXRuling::Encode};
     }
     const std::shared_ptr<State> state_;
     const DataCallback callback_;

@@ -71,8 +71,6 @@ class SimCardHandle : public Handle<SimCardParams<typename Generator::Input>, Si
 {
     using Base = Handle<SimCardParams<typename Generator::Input>, SimCardConn<Generator>>;
 public:
-    using typename Base::ParamType;
-    using typename Base::ConnType;
     SimCardHandle()
     {
         due_.setSingleShot(true);
@@ -86,7 +84,7 @@ protected:
 private:
     struct Pending
     {
-        std::weak_ptr<ConnType> connection;
+        std::weak_ptr<SimCardConn<Generator>> connection;
         quint64 requestId;
         RxTime begin;
         RxTime end;
@@ -107,17 +105,17 @@ private:
             Q_EMIT this->logMessage(QStringLiteral("虚拟采集任务投递失败"));
     }
 
-    [[nodiscard]] std::shared_ptr<ConnType> connOpen(const ParamType &params) final
+    [[nodiscard]] std::shared_ptr<SimCardConn<Generator>> connOpen(const SimCardParams<typename Generator::Input> &params) final
     {
         if (!params.capture)
         {
             Q_EMIT this->logMessage(QStringLiteral("虚拟采集未提供取数函数，无法连接"));
             return {};
         }
-        return std::make_shared<ConnType>(params);
+        return std::make_shared<SimCardConn<Generator>>(params);
     }
 
-    [[nodiscard]] bool connLoop(std::shared_ptr<ConnType> connection, typename Base::Sink sink) final
+    [[nodiscard]] bool connLoop(std::shared_ptr<SimCardConn<Generator>> connection, typename Base::Sink sink) final
     {
         connection->run([weak = std::weak_ptr(connection), sink = std::move(sink)](const QByteArray &frame, RxTime at) {
             if (const auto c = weak.lock()) sink(c, frame, at);
@@ -125,14 +123,14 @@ private:
         return true;
     }
 
-    void connBreak(std::shared_ptr<ConnType> connection) const final
+    void connBreak(std::shared_ptr<SimCardConn<Generator>> connection) const final
     {
         due_.stop();
         pending_.reset();
-        if (connection) QMetaObject::invokeMethod(connection.get(), &ConnType::quit, Qt::QueuedConnection);
+        if (connection) QMetaObject::invokeMethod(connection.get(), &SimCardConn<Generator>::quit, Qt::QueuedConnection);
     }
 
-    [[nodiscard]] bool connSend(std::shared_ptr<ConnType> connection, const QByteArray &data) const final
+    [[nodiscard]] bool connSend(std::shared_ptr<SimCardConn<Generator>> connection, const QByteArray &data) const final
     {
         Q_ASSERT(QThread::currentThread() == this->thread());
         if (!connection)
@@ -161,8 +159,8 @@ private:
         return true;
     }
 
-    [[nodiscard]] RXRuling onRX(const QByteArray &raw, RxTime at, std::shared_ptr<ConnType>) final
-    { return {RXRuling::Decode, raw, at}; }
-    [[nodiscard]] TXRuling onTX(const QByteArray &payload, std::shared_ptr<ConnType>) const final
-    { return {TXRuling::Encode, payload}; }
+    [[nodiscard]] RXRuling onRX(const QByteArray &raw, RxTime at, std::shared_ptr<SimCardConn<Generator>>) final
+    { return {raw, RXRuling::Decode, at}; }
+    [[nodiscard]] TXRuling onTX(const QByteArray &payload, std::shared_ptr<SimCardConn<Generator>>) const final
+    { return {payload, TXRuling::Encode}; }
 };

@@ -17,8 +17,8 @@ Q_SIGNALS:
     void connectionChanged(HandleCore::ResourcePhase) override;
     void logMessage(const QString &) const override;
 private:
-    RXRuling onRX(const QByteArray &raw, RxTime at, std::shared_ptr<ConnType>) override { return {RXRuling::Decode, raw, at}; }
-    TXRuling onTX(const QByteArray &raw, std::shared_ptr<ConnType>) const override { return {TXRuling::Encode, raw}; }
+    RXRuling onRX(const QByteArray &raw, RxTime at, std::shared_ptr<SerialConn<Bytes>>) override { return {raw, RXRuling::Decode, at}; }
+    TXRuling onTX(const QByteArray &raw, std::shared_ptr<SerialConn<Bytes>>) const override { return {raw, TXRuling::Encode}; }
 };
 int main(int argc, char **argv)
 {

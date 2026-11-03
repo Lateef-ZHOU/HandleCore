@@ -19,53 +19,36 @@ using DataCallback = std::function<void(const QByteArray &data, RxTime at)>;
 
 // 每次 onRX 只返回一个动作和一份产物；Decode 才使用 at。
 // Decode 上交数据，Reject 仅回发响应，Drop 不上交也不回发。
-struct RXRuling
+struct RXRuling : QByteArray
 {
-    enum Act
+    enum
     {
         Decode,
         Reject,
         Drop
-    };
-
-    Act act = Drop;
-    QByteArray payload;
+    } act = Drop;
 
     RxTime at{};
 };
 
 // Encode 将产物交给 connSend，Drop 拒发；发送结果沿用 connSend。
-struct TXRuling
+struct TXRuling : QByteArray
 {
-    enum Act
+    enum
     {
         Encode,
         Drop
-    };
-
-    Act act = Drop;
-    QByteArray payload;
-};
-
-// 只约束实际使用的默认构造、const 赋值和条件比较；不要求复制构造或完整相等关系。
-template <typename P>
-concept HandleParameters = std::default_initializable<P> && requires(P &current, const P &incoming)
-{
-    current = incoming;
-    (current != incoming) ? 0 : 1;
+    } act = Drop;
 };
 
 // 连接机制只依赖 Qt Core。所有者线程调用 start/send/stop，run 在收包线程执行。
 // conn 四口管理资源与 I/O，onRX/onTX 决定协议动作，具体类提供通知实现。
 // 生命周期入口为 start/stop，不使用继承的 QThread 启停接口替代它们。
 // 所有者清理回调依赖前须同步 stop；具体 Handle 析构须在拆除派生状态前 stop。
-template <HandleParameters ParamT, typename ConnT>
+template <typename ParamT, typename ConnT>
 class Handle : public QThread
 {
 public:
-    using ParamType = ParamT;
-    using ConnType = ConnT;
-
     // connLoop 持有连接，同步交入每份字节及其接收时刻。
     using Sink = std::function<void(std::shared_ptr<ConnT>, const QByteArray &, RxTime)>;
     Q_DISABLE_COPY(Handle)
@@ -73,7 +56,7 @@ public:
     Handle() = default;
 
     // 已连接且参数不同则重启；运行中其余请求拒收。true 仅表示接受启动参数。
-    bool start(const ParamType &params)
+    bool start(const ParamT &params)
     {
         if (isOpen() && params_ != params)
             stop();
@@ -119,7 +102,7 @@ public:
         case TXRuling::Drop:
             return false;
         case TXRuling::Encode:
-            return connSend(conn, r.payload);
+            return connSend(conn, r);
         }
         return false;
     }
@@ -219,7 +202,7 @@ private:
     std::atomic<std::weak_ptr<ConnT>> conn_;
 };
 
-template <HandleParameters ParamT, typename ConnT>
+template <typename ParamT, typename ConnT>
 typename Handle<ParamT, ConnT>::Sink Handle<ParamT, ConnT>::makeDispatch(Handle<ParamT, ConnT> *self)
 {
     return [self](std::shared_ptr<ConnT> conn, const QByteArray &raw, const RxTime at)
@@ -228,10 +211,10 @@ typename Handle<ParamT, ConnT>::Sink Handle<ParamT, ConnT>::makeDispatch(Handle<
         switch (r.act)
         {
         case RXRuling::Decode:
-            self->onData(r.payload, r.at);
+            self->onData(r, r.at);
             break;
         case RXRuling::Reject:
-            (void)self->connSend(conn, r.payload);
+            (void)self->connSend(conn, r);
             break;
         case RXRuling::Drop:
             break;
@@ -241,4 +224,7 @@ typename Handle<ParamT, ConnT>::Sink Handle<ParamT, ConnT>::makeDispatch(Handle<
 
 // 检查公开继承关系，不约束 Qt 元对象登记方式。
 template <typename H>
-concept HandleLike = std::derived_from<H, Handle<typename H::ParamType, typename H::ConnType>>;
+concept HandleLike = requires(H *handle)
+{
+    []<typename P, typename C>(Handle<P, C> *) {}(handle);
+};
