@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <QByteArray>
+#include <QList>
 #include <QMetaObject>
 #include <QMetaType>
 #include <QObject>
@@ -116,6 +117,15 @@ public:
             return connSend(conn, r);
         }
         return false;
+    }
+
+    // 所属线程：按顺序逐条发送，首个失败即返回；空列表成功且不发送。
+    bool send(const QList<QByteArray> &commands) const
+    {
+        for (const auto &cmd : commands)
+            if (!send(cmd))
+                return false;
+        return true;
     }
 
 protected:

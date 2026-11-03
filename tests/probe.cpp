@@ -175,6 +175,23 @@ void dispatchAndSignals()
     require(state->sent == expected, "RX/TX actions produced wrong output");
 }
 
+void commandLists()
+{
+    auto state = std::make_shared<State>();
+    CoreHandle handle(state, [](const QByteArray &, RxTime) {});
+    require(handle.send(QList<QByteArray>{}) && state->sent.empty(), "empty command list sent data");
+    require(handle.open({state}), "command list open rejected");
+    acquire(state->processed);
+    require(handle.send(QList<QByteArray>{"one", "two"}), "command list failed");
+    require(state->sent == std::vector<QByteArray>{"tx:one", "tx:two"}, "command order changed");
+    require(!handle.send(QList<QByteArray>{"three", "drop", "skipped"}), "TX drop ignored");
+    require(state->sent == std::vector<QByteArray>{"tx:one", "tx:two", "tx:three"}, "list continued after TX drop");
+    state->sendSucceeds = false;
+    require(!handle.send(QList<QByteArray>{"failure", "skipped"}), "transport failure ignored");
+    require(state->sent == std::vector<QByteArray>{"tx:one", "tx:two", "tx:three", "tx:failure"}, "list continued after transport failure");
+    handle.close();
+}
+
 void stopDuringCallback()
 {
     auto state = std::make_shared<State>();
@@ -315,6 +332,7 @@ int main(int argc, char **argv)
             && phase.keyToValue("Released") == 3,
             "resource phase namespace metadata changed");
     dispatchAndSignals();
+    commandLists();
     stopDuringCallback();
     stopDuringOpen();
     reconnectAndInitialFailure();

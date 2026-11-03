@@ -186,3 +186,6 @@ Windows/MSVC/Qt 6.11.2：build-virtual-all Release 增量构建成功，CTest 6/
 
 
 2026-11-04 用户定：Handle 连接入口统一 open/close，内部仍用 QThread::start，外部不使用线程启动口替代连接。Device/Bridge/官邸和验证同步调用名，无兼容薄转发，重连、关闭、阶段通知与裁决保持。Windows Qt 6.11.2/MSVC 独立增量构建、公开头编译及 CTest 6/6 通过（build-virtual-all/open-close-build.log）；本轮未做 Linux/ARM 或硬件验证，未推送。
+## 2026-11-04：命令列表 send 重载
+
+Windows/MSVC/Qt 6.11.2 独立增量构建、公开头编译及 CTest 6/6 通过（4.87 秒）。新增空列表零发送、顺序发送、TX 拒绝与底层发送失败均短路的验证，现有串口/Pcap、重连和关闭回归通过。证据：build-virtual-all/send-list-build.log、Testing/Temporary/LastTest.log。未测 Linux/ARM 或实物，未推送。
