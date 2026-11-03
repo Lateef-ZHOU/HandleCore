@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <QByteArray>
+#include <QString>
 
 #include "HandleBase.h"
 #include "SerialPort.h"
@@ -64,10 +65,22 @@ public:
     void breakLoop() noexcept { break_.store(true, std::memory_order_relaxed); }
 
     // 主动发送与 HandleBase 排队的 Reject 回包共用所属线程写口；保留连接级写互斥。
-    [[nodiscard]] int write(const QByteArray &data)
+    // 完整写入才成功；error 仅在返回 false 时写入并供调用方记录日志。
+    [[nodiscard]] bool send(const QByteArray &data, QString &error)
     {
         const std::lock_guard lock(writeGate_);
-        return sp_blocking_write(port_, data.constData(), static_cast<size_t>(data.size()), writeTimeoutMs_);
+        const int written = sp_blocking_write(port_, data.constData(), static_cast<size_t>(data.size()), writeTimeoutMs_);
+        if (written < 0)
+        {
+            error = QStringLiteral("串口发送失败，错误码 %1").arg(written);
+            return false;
+        }
+        if (written != data.size())
+        {
+            error = QStringLiteral("串口发送超时，仅写入 %1/%2 字节").arg(written).arg(data.size());
+            return false;
+        }
+        return true;
     }
 
 private:
@@ -127,15 +140,10 @@ private:
             Q_EMIT this->logMessage(QStringLiteral("设备未连接，无法发送数据"));
             return false;
         }
-        const int written = conn->write(data);
-        if (written < 0)
+        QString error;
+        if (!conn->send(data, error))
         {
-            Q_EMIT this->logMessage(QStringLiteral("串口发送失败，错误码 %1").arg(written));
-            return false;
-        }
-        if (written != data.size())
-        {
-            Q_EMIT this->logMessage(QStringLiteral("串口发送超时，仅写入 %1/%2 字节").arg(written).arg(data.size()));
+            Q_EMIT this->logMessage(error);
             return false;
         }
         return true;

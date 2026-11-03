@@ -1,5 +1,12 @@
 # CI 与本地复现
 
+## 2026-11-03：串口连接层判断发送结果（用户定）
+
+SerialConn::write 改为 bool send(data, error)，完整写入才返回 true；负错误码与短写诊断由连接层生成，经 QString 输出参数交 Handle 发一次日志。connSend 只检查空连接、调用 send 并报告失败，删除字节数二次判断；不增加错误缓存、日志回调或发送重试。loop/breakLoop、写互斥和关闭逻辑保持。
+
+Windows/MSVC/Qt 6.11.2 全模块 Release、公开头编译和 CTest 9/9（12.50 秒）通过，无 C++ 编译诊断。发送验证覆盖完整写入、短写、零字节超时和负错误码，并检查每项失败只记录一次。证据 build-virtual-all/{build,test}-serial-send.log。未测 Linux、ARM 或硬件，未推送。
+
+
 ## 2026-11-03：串口接收循环命名整理（用户定）
 
 删除 SerialHandle 的 Base 同义别名及继承构造声明，沿用隐式默认构造；SerialConn 的接收循环统一命名 loop，与 breakLoop 对应。connLoop 同步调用点已更新，接收、成帧、发送及关闭行为不变。

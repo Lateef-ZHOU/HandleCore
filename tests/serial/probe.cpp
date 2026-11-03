@@ -105,6 +105,8 @@ int main(int argc, char **argv)
     require(!handle.send("drop"), "TX Drop accepted");
     writeResult(2);
     require(!handle.send("long"), "short write accepted");
+    writeResult(0);
+    require(!handle.send("long"), "zero-byte timeout accepted");
     writeResult(SP_ERR_FAIL);
     require(!handle.send("long"), "write failure accepted");
     writeResult(-1000);
@@ -131,7 +133,9 @@ int main(int argc, char **argv)
     require(received == std::vector<QByteArray>{"one", "two", "partial", "queued-marker", "fresh"}, "framer state leaked across connections");
     require(connections == 22 && livePorts() == 0 && closes() == 2, "each connection must announce acquisition and release");
     require(onWorker && typedTime, "callback thread/time changed");
-    require(logs.contains("串口发送超时，仅写入 2/4 字节") && logs.contains("串口发送失败，错误码 -2"), "write diagnostics missing");
+    require(logs.count("串口发送超时，仅写入 2/4 字节") == 1
+            && logs.count("串口发送超时，仅写入 0/4 字节") == 1
+            && logs.count("串口发送失败，错误码 -2") == 1, "send diagnostics missing or duplicated");
 
     reset(); failOpen(true);
     require(handle.start(params) && handle.wait(2000), "first-open failure did not exit");
