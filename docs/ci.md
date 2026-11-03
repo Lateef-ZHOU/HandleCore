@@ -158,3 +158,7 @@ Windows MSVC / Qt 6.11.2：build-virtual-all 全模块 Release、公开头 /W4 /
 ## 2026-11-03 移除无调用方的 IPv4 文本转换
 
 删除 IPv4::toString；MAC::toString 仍供校验验证使用，地址解析、网卡枚举与协议逻辑保持。Windows build-virtual-all 增量构建成功，CTest 9/9（12.58 秒），日志 build-network-ui.log / test-network-ui.log；主程序构建与八秒冒烟通过。未运行 Linux 或硬件验证。
+
+## 2026-11-03 串口纯虚契约去重
+
+删除 SerialHandle 本层重复的 onRX/onTX 纯虚声明，直接继承 Handle 的约束；不改变收发、重连和关闭。Windows build-virtual-all 增量构建成功，CTest 9/9（12.54 秒）。现有 MissingRX/MissingTX 编译期断言通过，证明协议遗漏实现仍为抽象类。证据：build-virtual-all/build-serial-contract.log、test-serial-contract.log。本轮未测 Linux 或硬件。

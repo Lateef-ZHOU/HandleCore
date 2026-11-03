@@ -97,10 +97,6 @@ class SerialHandle : public Handle<SerialParams, SerialConn<Framer>>
 {
 protected:
     ~SerialHandle() override = default;
-    [[nodiscard]] virtual RXRuling onRX(const QByteArray &frame, RxTime at,
-                                       std::shared_ptr<SerialConn<Framer>> conn) override = 0;
-    [[nodiscard]] virtual TXRuling onTX(const QByteArray &payload,
-                                       std::shared_ptr<SerialConn<Framer>> conn) const override = 0;
 
 private:
     [[nodiscard]] std::shared_ptr<SerialConn<Framer>> connOpen(const SerialParams &params) final
