@@ -1,5 +1,13 @@
 # CI 与本地复现
 
+## 2026-11-03：清理串口测试写阻塞残留（用户定）
+
+仅删除测试替身的 `blockWrites`、`writesBlocked` 和模拟发送内的条件等待；发送侧锁改用 `lock_guard`。接收仍用条件变量等待，保留 `writes()` 及短写/失败注入。生产代码、发送线程、重连和关闭逻辑均未改，不更新应用固定依赖或运行包。
+
+Windows/MSVC/Qt 6.11.2 增量构建通过：HandleCore 串口 CTest 2/2（1.31 秒），激光器 serial-delivery/device/telemetry/commands 4/4（2.52 秒）。Linux/GCC 16.2.1/Qt Core 6.8.3：复用该替身的 BridgeCore 增量构建、CTest 4/4（2.98 秒）通过。均为受控测试，未连接实物、未更新板卡；仅本地提交，未推送。
+
+证据：本库 `build-virtual-all/{build,test}-remove-write-block.log`，RayshiningDevice 的 `build/flatten-tests/{build,test}-remove-write-block.log`，ArchHFNL 的 `~/.cache/lidar-flatten-includes-20261103/bridge-remove-write-block-{build,test}.log`。
+
 ## 2026-11-03：仿真 Handle 迁回官邸（用户定）
 
 删除仿真模块开关、构建目标和 CI 配置；两个 Handle、内部协议、运动模型及对应测试迁入各自官邸。运行头与迁移前逐文件核对一致；测试主体不变。历史验证下文保留当时范围，当前 profile 为 core / serial / pcap / all。

@@ -13,7 +13,7 @@ struct State
 {
     std::deque<QByteArray> incoming;
     std::vector<QByteArray> written;
-    bool readFailure = false, openFailure = false, configFailure = false, writesBlocked = false;
+    bool readFailure = false, openFailure = false, configFailure = false;
     int openCount = 0, closeCount = 0, alive = 0, readCount = 0;
     int writeCount = 0, activeWrites = 0, maxWrites = 0, writeResult = -1000, baud = 0;
     sp_flowcontrol flow = SP_FLOWCONTROL_NONE;
@@ -31,7 +31,6 @@ void failRead() { const std::lock_guard lock(gate); state.readFailure = true; ch
 void failOpen(bool fail) { const std::lock_guard lock(gate); state.openFailure = fail; }
 void failConfiguration(bool fail) { const std::lock_guard lock(gate); state.configFailure = fail; }
 void writeResult(int result) { const std::lock_guard lock(gate); state.writeResult = result; }
-void blockWrites(bool blocked) { const std::lock_guard lock(gate); state.writesBlocked = blocked; changed.notify_all(); }
 int opens() { const std::lock_guard lock(gate); return state.openCount; }
 int closes() { const std::lock_guard lock(gate); return state.closeCount; }
 int livePorts() { const std::lock_guard lock(gate); return state.alive; }
@@ -101,12 +100,11 @@ sp_return sp_blocking_read_next(sp_port *, void *buf, size_t count, unsigned tim
 }
 sp_return sp_blocking_write(sp_port *, const void *buf, size_t count, unsigned timeout)
 {
-    std::unique_lock lock(gate);
+    const std::lock_guard lock(gate);
     ++state.writeCount;
     ++state.activeWrites;
     state.maxWrites = std::max(state.maxWrites, state.activeWrites);
     state.timeout = timeout;
-    changed.wait(lock, [] { return !state.writesBlocked; });
     const int result = state.writeResult == -1000 ? static_cast<int>(count) : state.writeResult;
     if (result > 0) state.written.emplace_back(static_cast<const char *>(buf), result);
     --state.activeWrites;

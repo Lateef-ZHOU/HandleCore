@@ -12,7 +12,6 @@ void failRead();
 void failOpen(bool fail);
 void failConfiguration(bool fail);
 void writeResult(int result);
-void blockWrites(bool blocked);
 int opens();
 int closes();
 int livePorts();
