@@ -1,3 +1,4 @@
+#include "../CallbackHandle.h"
 #include <PcapHandle.h>
 #include "FakePcap.h"
 #include <QCoreApplication>
@@ -43,7 +44,7 @@ void queuedArpAndUdp()
     std::atomic<int> received{0};
     std::atomic<bool> valid{false};
     auto *owner = QThread::currentThread();
-    PcapHandle h([&](const QByteArray &data, RxTime at) {
+    CallbackHandle<PcapHandle> h([&](const QByteArray &data, RxTime at) {
         valid = data == "inbound" && at == std::chrono::system_clock::from_time_t(1234567) +
             std::chrono::microseconds(654321) && QThread::currentThread() != owner;
         ++received;
@@ -83,7 +84,7 @@ void staleReplies()
     for (bool reconnect : {false, true})
     {
         FakePcap::reset();
-        PcapHandle h([](const QByteArray &, RxTime) {});
+        CallbackHandle<PcapHandle> h([](const QByteArray &, RxTime) {});
         const auto p = params(); open(h, p);
         auto old = FakePcap::last();
         FakePcap::inject(old, ARPRequest(peer(), p.deviceIPv4, p.hostIPv4));
@@ -103,7 +104,7 @@ void staleReplies()
     }
     FakePcap::reset();
     {
-        PcapHandle h([](const QByteArray &, RxTime) {}); const auto p = params(); open(h, p);
+        CallbackHandle<PcapHandle> h([](const QByteArray &, RxTime) {}); const auto p = params(); open(h, p);
         auto s = FakePcap::last(); FakePcap::inject(s, ARPRequest(peer(), p.deviceIPv4, p.hostIPv4));
         until([&] { return s->delivered == 1; }, false);
     }
@@ -115,7 +116,7 @@ void openFailuresAndStop()
     for (int stage = 1; stage <= 8; ++stage)
     {
         FakePcap::reset(); FakePcap::failStage = stage;
-        PcapHandle h([](const QByteArray &, RxTime) {});
+        CallbackHandle<PcapHandle> h([](const QByteArray &, RxTime) {});
         require(h.start(params()) && h.wait(2000) && !h.isOpen(), "first open failure retried or stayed online");
         require(FakePcap::opens() == (stage == 1 ? 0u : 1u), "first failure opened multiple handles");
         if (stage > 1) require(FakePcap::last()->closed, "partly opened handle leaked");
@@ -123,7 +124,7 @@ void openFailuresAndStop()
     }
     FakePcap::reset(); FakePcap::failStage = 9; // Positive activation warnings remain successful.
     QSemaphore entered, release;
-    PcapHandle h([&](const QByteArray &, RxTime) { entered.release(); release.acquire(); });
+    CallbackHandle<PcapHandle> h([&](const QByteArray &, RxTime) { entered.release(); release.acquire(); });
     const auto p = params(true); open(h, p);
     require(h.send("seed") && kindOf(FakePcap::sent().back().bytes) == FrameKind::UDPDatagram, "MAC seed ignored");
     auto s = FakePcap::last();

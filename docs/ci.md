@@ -58,3 +58,10 @@ cmake "-DBUILD_ROOT=<构建目录>" "-DPREFIX_PATH=<Qt 前缀>;<libserialport �
 ## 2026-11-02 资源阶段验证
 
 Windows / MSVC / Qt 6.11.2 全模块 Release 与公开头编译通过，CTest 13/13；新增同步 AboutToRelease 可发送、阶段顺序、重复 stop、旧连接外部份额保活不再开放发送的检查。新增 ResourcePhase/HandleBase 单头编译后重跑核心通过。Linux / GCC 16.2.1 / Qt Core 6.8.3 核心与两项仿真模块构建、CTest 9/9 通过（ArchHFNL 的 resource-phase-20261102/handle-build）。Linux 本轮未启用串口/Pcap；未操作 ARM 或硬件。Windows 证据：build/resource-build-final.log、resource-test.log、resource-test-final.log。
+
+
+## 2026-11-03 上传虚函数迁移
+
+上传入口改为纯虚 onData；删除外部上传回调存储/构造参数。可复用 Handle 保持抽象，最终接收端必须在派生状态销毁前同步 stop。测试适配器仅存在 tests，库不保留回调兼容入口。
+
+Windows MSVC / Qt 6.11.2：build-virtual-all 全模块 Release、公开头 /W4 /WX、CTest 13/13 通过。Linux GCC / Qt Core 6.8.3：ArchHFNL 的 virtual-upload-20261103/build-HandleCore 全模块构建及 CTest 13/13 通过。覆盖重连、关闭、串口一块多帧、Pcap 排队发送与虚拟执行；未运行 ARM 或真实硬件。运行逻辑不变；仅本地提交，尚未推送。

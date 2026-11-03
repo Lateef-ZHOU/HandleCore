@@ -73,7 +73,7 @@ class SimCardHandle : public Handle<SimCardParams<typename Generator::Input>, Si
 public:
     using typename Base::ParamType;
     using typename Base::ConnType;
-    explicit SimCardHandle(DataCallback onData) : Base(std::move(onData))
+    SimCardHandle()
     {
         due_.setSingleShot(true);
         due_.setTimerType(Qt::PreciseTimer);

@@ -45,12 +45,12 @@ struct PcapConn
 
 // 单连接以太网 UDP Handle。worker 读包并裁决；所属线程执行所有实际发送。
 // 单句柄并发读写是本模块的约定，不宣称 libpcap 对此提供跨平台线程安全保证。
-class PcapHandle final : public Handle<PcapParams, PcapConn>
+class PcapHandle : public Handle<PcapParams, PcapConn>
 {
     Q_OBJECT
 public:
     using Handle::Handle;
-    ~PcapHandle() override { stop(); }
+    ~PcapHandle() override = default;
 
     bool start(const PcapParams &params)
     {

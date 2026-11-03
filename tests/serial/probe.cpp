@@ -1,3 +1,4 @@
+#include "../CallbackHandle.h"
 #include <SerialHandle.h>
 #include "FakeSerialPort.h"
 #include <atomic>
@@ -34,12 +35,12 @@ private:
 };
 }
 
-class LineHandle final : public SerialHandle<Lines>
+class LineHandle : public SerialHandle<Lines>
 {
     Q_OBJECT
 public:
     using SerialHandle::SerialHandle;
-    ~LineHandle() override { stop(); }
+    ~LineHandle() override = default;
 Q_SIGNALS:
     void connectionChanged(HandleCore::ResourcePhase) override;
     void logMessage(const QString &) const override;
@@ -58,12 +59,14 @@ private:
 
 class MissingRX : public SerialHandle<Lines>
 {
+    void onData(const QByteArray &, RxTime) override {}
     void connectionChanged(HandleCore::ResourcePhase) override {}
     void logMessage(const QString &) const override {}
     TXRuling onTX(const QByteArray &, std::shared_ptr<ConnType>) const override { return {}; }
 };
 class MissingTX : public SerialHandle<Lines>
 {
+    void onData(const QByteArray &, RxTime) override {}
     void connectionChanged(HandleCore::ResourcePhase) override {}
     void logMessage(const QString &) const override {}
     RXRuling onRX(const QByteArray &, RxTime, std::shared_ptr<ConnType>) override { return {}; }
@@ -81,7 +84,7 @@ int main(int argc, char **argv)
     std::mutex receivedGate;
     std::atomic<bool> onWorker{true}, typedTime{true};
     int connections = 0;
-    LineHandle handle([&](const QByteArray &frame, RxTime at) {
+    CallbackHandle<LineHandle> handle([&](const QByteArray &frame, RxTime at) {
         onWorker = onWorker && QThread::currentThread() != app.thread();
         typedTime = typedTime && at != RxTime{};
         const std::lock_guard lock(receivedGate); received.push_back(frame);
@@ -142,7 +145,7 @@ int main(int argc, char **argv)
     QSemaphore entered, leave;
     std::atomic<bool> callbackDone{false};
     {
-        LineHandle delayed([&](const QByteArray &, RxTime) { entered.release(); leave.acquire(); callbackDone = true; });
+        CallbackHandle<LineHandle> delayed([&](const QByteArray &, RxTime) { entered.release(); leave.acquire(); callbackDone = true; });
         require(delayed.start(params) && until([&] { return delayed.isOpen(); }), "delayed open failed");
         enqueue("wait\n"); require(entered.tryAcquire(1, 2000), "callback not entered");
         std::thread unblock([&] { QThread::msleep(30); leave.release(); });

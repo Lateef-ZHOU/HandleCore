@@ -71,12 +71,14 @@ class CoreHandle final : public Handle<Params, Connection>
     Q_OBJECT
 public:
     CoreHandle(std::shared_ptr<State> state, DataCallback callback)
-        : Handle(std::move(callback)), state_(std::move(state)) {}
+        : state_(std::move(state)), callback_(std::move(callback)) {}
     ~CoreHandle() override { stop(); }
 Q_SIGNALS:
     void connectionChanged(HandleCore::ResourcePhase) override;
     void logMessage(const QString &) const override;
 private:
+    // 测试探针借此注入阻塞/断言；生产 Handle 不保存上传回调。
+    void onData(const QByteArray &data, RxTime at) override { callback_(data, at); }
     std::shared_ptr<Connection> connOpen(const Params &params) override
     {
         require(params.state == state_, "reconnect parameters changed");
@@ -132,6 +134,7 @@ private:
         return {TXRuling::Encode, QByteArray("tx:") + raw};
     }
     const std::shared_ptr<State> state_;
+    const DataCallback callback_;
 };
 
 static_assert(HandleLike<CoreHandle>);

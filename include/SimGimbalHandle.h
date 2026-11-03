@@ -39,12 +39,12 @@ public:
     std::chrono::steady_clock::time_point last{}; // 上一拍时刻：电机按真实流逝推进，不假定定时器准点
 };
 
-class SimGimbalHandle final : public Handle<SimGimbalParams, SimGimbalConn>
+class SimGimbalHandle : public Handle<SimGimbalParams, SimGimbalConn>
 {
     Q_OBJECT
 public:
     using Handle::Handle;
-    ~SimGimbalHandle() override { stop(); }
+    ~SimGimbalHandle() override = default;
 Q_SIGNALS:
     void connectionChanged(HandleCore::ResourcePhase connected) override;
     void logMessage(const QString &text) const final;

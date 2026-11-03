@@ -1,3 +1,4 @@
+#include "../CallbackHandle.h"
 #include <PcapHandle.h>
 #include <QCoreApplication>
 #include <cstdio>
@@ -43,7 +44,7 @@ int main(int argc, char **argv)
     const auto interfaces = availableInterfaces();
     for (const auto &nic : interfaces)
         require(!nic.pcapDeviceName.isEmpty() && nic.macAddress.size() == 6, "invalid NIC metadata");
-    PcapHandle handle([](const QByteArray &, RxTime) {});
+    CallbackHandle<PcapHandle> handle([](const QByteArray &, RxTime) {});
     require(!handle.send("offline"), "offline send succeeded");
     std::printf("%s; enumerated %lld Ethernet interfaces; offline ARP/UDP/BPF passed\n",
                 pcap_lib_version(), static_cast<long long>(interfaces.size()));

@@ -1,6 +1,6 @@
 # HandleCore
 
-C++20 / Qt Core 通信与仿真执行库，供 Windows 和 Linux 的应用层共用。提供同步收发回调、连接重试及同步关闭机制，具体设备业务留在调用方。
+C++20 / Qt Core 通信与仿真执行库，供 Windows 和 Linux 的应用层共用。提供同步虚函数上传、连接重试及同步关闭机制，具体设备业务留在调用方。
 
 Core、Pcap 与 SimGimbal 为静态目标：Core 唯一生成 ResourcePhase 的 Qt 枚举元对象，后两者唯一生成信号实现；Handle、Serial 与 SimCard 的模板实现仍在头文件内。不生成额外 DLL，不依赖 QML、Qt Gui、Quick 或 Qt Test。所有可选模块默认关闭。
 
@@ -59,11 +59,11 @@ set_target_properties(my_app PROPERTIES AUTOMOC ON)
 
 公开源码位于 [Lateef-ZHOU/HandleCore](https://github.com/Lateef-ZHOU/HandleCore)。将示例中的 GIT_TAG 替换为已验证的完整提交 SHA，不跟随分支头，也不与 `GIT_SHALLOW` 混用。首次配置需要 Git 和访问 GitHub 的网络；拥有源码目录的调用方也可 `add_subdirectory`。
 
-模板型 Handle 的具体末端负责 `Q_OBJECT`、Qt 通知及析构首句 `stop()`；具体 Pcap/虚拟云台类型的 AUTOMOC 由本库负责，不再向消费者传播信号头作为编译源。应用无需包含旧项目的 Device、Collector 或模型。
+Handle 的具体接收末端重写 `onData(const QByteArray &, RxTime)`，负责 `Q_OBJECT`、Qt 通知及析构首句 `stop()`；具体 Pcap/虚拟云台类型的 AUTOMOC 由本库负责，不再向消费者传播信号头作为编译源。应用无需包含旧项目的 Device、Collector 或模型。
 
 ## 使用边界
 
-- 所属线程调用 `start/send/stop` 并运行事件循环；数据回调在工作线程同步执行，回调所依赖的资源必须活到 `stop()` 返回。
+- 所属线程调用 `start/send/stop` 并运行事件循环；`onData` 在工作线程同步执行，回调所依赖的资源必须活到 `stop()` 返回。
 - `connectionChanged(HandleCore::ResourcePhase)` 区分资源阶段：每次打开前 AboutToAcquire、发布连接后 Acquired、撤销连接后 Released。主动 stop 在所属线程、促断前同步发 AboutToRelease，收尾发送和撤单只订阅此阶段；自动重连不发该阶段。完成通知可能排队，界面只回读实际状态，不从事件参数缓存连接状态。QThread::finished 仍表示线程结束，不能代替资源阶段。
 - 首次打开失败即退出，连接后的 I/O 失败按原机制重连。设备业务配置恢复由协议层或应用负责。
 - `RxTime` 直接使用 `std::chrono::system_clock::time_point`；Qt/QML 登记由应用决定。

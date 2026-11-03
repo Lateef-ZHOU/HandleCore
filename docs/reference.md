@@ -31,8 +31,8 @@ Makefiles 等单配置生成器在配置时加 `-DCMAKE_BUILD_TYPE=Release`。Wi
 
 - `HandleParameters` 要求参数可默认构造、可从 const 引用赋值，且 `current != incoming` 可用于条件。不要求复制构造、赋值返回引用或完整相等运算集合。
 - 所属线程调用 `start(params)`、`send(payload)`、`stop()`，其他线程可观察 `isOpen()`。继承的 QThread 启停方法不替代 Handle 生命周期入口。
-- 构造时提供可调用的数据回调，回调在收包线程同步执行。字节可能借用外部缓冲；异步留存者负责数据所有权，RxTime 可按值复制。
-- Handle 持有调用方交入的 onData；内部 Sink 由私有静态 makeDispatch 在每轮 connLoop 前现场生成，不存固定派发闭包成员。虚拟云台将 Sink 移入 Qt 定时器槽，虚拟采集将结果交付函数移入连接；串口/Pcap 在同步收包栈上借用 Sink。接收方仍须遵守 stop 返回前退出在途回调的契约。
+- 默认构造，接收方派生并重写纯虚 `onData(const QByteArray &, RxTime)`，在收包线程同步执行。字节可能借用外部缓冲；异步留存者负责数据所有权，RxTime 可按值复制。
+- Handle 不再持有外部上传回调；内部 Sink 由私有静态 makeDispatch 在每轮 connLoop 前现场生成，不存固定派发闭包成员。虚拟云台将 Sink 移入 Qt 定时器槽，虚拟采集将结果交付函数移入连接；串口/Pcap 在同步收包栈上借用 Sink。接收方仍须遵守 stop 返回前退出在途回调的契约。
 - 一次 `onRX` 产生一项裁决：Decode 上交一份数据，Reject 仅回发一份响应，Drop 无动作。`onTX` 的 Encode 交给 `connSend`，Drop 返回失败。接口及行为未扩展。
 - 首次打开失败即退出；建立过连接后 I/O 失败仍按一秒间隔重连。每次打开前发 AboutToAcquire，发布可发送连接后发 Acquired，撤销观察口并释放工作线程份额后发 Released。打开失败不会伪造 Acquired/Released；自动重连的阶段也通知，但不发 AboutToRelease。上层通过实际状态判断是否重新配置。
 - `stop()` 在所属线程先同步发 connectionChanged(ResourcePhase::AboutToRelease)，接收方可在促断前尝试收尾发送；随后记录停止请求、促断并等待收包与同步回调退出。重复 stop 不重复通知；首次打开失败已退出后调用 stop 不通知。打开中/重连间隙关闭仍通知，但发送可能失败，失败不阻止关闭。
@@ -49,7 +49,7 @@ Makefiles 等单配置生成器在配置时加 `-DCMAKE_BUILD_TYPE=Release`。Wi
 
 主程序四件套和既有设备生命周期验证仍使用原入口；独立测试不替代硬件验证。
 
-## 固定回调所有权整理（2026-10-25）
+## 固定回调所有权整理（2026-10-25 历史记录；外部上传现已改为虚函数）
 
 Handle 删除固定 dispatch_ 成员，以类内声明、类外定义的私有静态 makeDispatch 在每轮 connLoop 前生成 Sink；onData_ 仍是外部回调的实际持有者。SimGimbal 将一次性交出的 Sink 移入定时器槽。Serial/Pcap 的同步栈上适配、SimCard 的连接快照和结果交付成员各有实际使用期，保持原样。裁决函数体、start/send/stop、重连循环除工厂调用外均核对不变，不增加逐次收包转发或新的关闭机制。
 

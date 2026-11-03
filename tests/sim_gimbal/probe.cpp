@@ -1,3 +1,4 @@
+#include "../CallbackHandle.h"
 #include <SimGimbalHandle.h>
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -51,7 +52,7 @@ static void rejectedConnections()
     for (const auto &p : invalid)
     {
         std::atomic<int> frames{0}, logs{0}, opened{0};
-        SimGimbalHandle handle([&](const QByteArray &, RxTime) { ++frames; });
+        CallbackHandle<SimGimbalHandle> handle([&](const QByteArray &, RxTime) { ++frames; });
         QObject::connect(&handle, &SimGimbalHandle::logMessage, &handle,
                          [&](const QString &) { ++logs; }, Qt::DirectConnection);
         QObject::connect(&handle, &SimGimbalHandle::connectionChanged, &handle,
@@ -71,7 +72,7 @@ static void traffic()
     std::atomic<bool> workerDelivery{true}, validTime{true};
     QThread *owner = QThread::currentThread();
     const auto began = std::chrono::system_clock::now();
-    SimGimbalHandle handle([&](const QByteArray &raw, RxTime at) {
+    CallbackHandle<SimGimbalHandle> handle([&](const QByteArray &raw, RxTime at) {
         const auto report = SimGimbalWire::decode<Report>(raw);
         require(report.has_value(), "bad report format");
         if (QThread::currentThread() == owner) workerDelivery = false;
@@ -127,7 +128,7 @@ static void closeDuringCallback()
 {
     QSemaphore entered, release;
     std::atomic<bool> first{true}, exited{false};
-    auto handle = std::make_unique<SimGimbalHandle>([&](const QByteArray &, RxTime) {
+    auto handle = std::make_unique<CallbackHandle<SimGimbalHandle>>([&](const QByteArray &, RxTime) {
         if (first.exchange(false)) { entered.release(); release.acquire(); exited = true; }
     });
     require(handle->start(SimGimbalParams{0, 0, 1ms, {0, 0}}), "callback fixture start");
@@ -137,7 +138,7 @@ static void closeDuringCallback()
     require(exited, "destructor returned before callback exited");
     for (int i = 0; i < 40; ++i)
     {
-        SimGimbalHandle immediate([](const QByteArray &, RxTime) {});
+        CallbackHandle<SimGimbalHandle> immediate([](const QByteArray &, RxTime) {});
         require(immediate.start({}), "immediate start");
         immediate.stop();
         require(!immediate.isRunning() && !immediate.isOpen(), "stop during open");
@@ -151,3 +152,6 @@ int main(int argc, char **argv)
     closeDuringCallback();
     std::cout << "PASS: SimGimbal production I/O, validation, worker delivery and synchronous shutdown\n";
 }
+
+static_assert(std::is_abstract_v<SimGimbalHandle>);
+static_assert(!std::is_constructible_v<SimGimbalHandle, DataCallback>);

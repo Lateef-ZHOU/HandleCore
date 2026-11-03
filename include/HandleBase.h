@@ -70,11 +70,7 @@ public:
     using Sink = std::function<void(std::shared_ptr<ConnT>, const QByteArray &, RxTime)>;
     Q_DISABLE_COPY(Handle)
 
-    // onData 必须可调用，其捕获的状态须存活到 stop 返回。
-    explicit Handle(DataCallback onData)
-        : onData_(std::move(onData))
-    {
-    }
+    Handle() = default;
 
     // 已连接且参数不同则重启；运行中其余请求拒收。true 仅表示接受启动参数。
     bool start(const ParamType &params)
@@ -129,6 +125,10 @@ public:
     }
 
 protected:
+
+    // 收包线程同步上传协议产物；实现可覆写处理或由具体类声明为信号。
+    // 字节可能借用底层缓冲，异步留存须取得所有权；依赖状态清理前必须 stop。
+    virtual void onData(const QByteArray &data, RxTime at) = 0;
 
     // 派生状态须已由具体类/所有者保护；本层等待不替代提前 stop。
     ~Handle() override { wait(); }
@@ -212,8 +212,6 @@ private:
     // 每轮收包生成派发回调，由 connLoop 接收；本层不保存固定闭包副本。
     [[nodiscard]] static Sink makeDispatch(Handle *self);
 
-    const DataCallback onData_;
-
     // 停止请求跨打开/收包/重连等待保留，线程退出后由 stop 清空。
     QSemaphore stopGate_;
 
@@ -230,7 +228,7 @@ typename Handle<ParamT, ConnT>::Sink Handle<ParamT, ConnT>::makeDispatch(Handle<
         switch (r.act)
         {
         case RXRuling::Decode:
-            self->onData_(r.payload, r.at);
+            self->onData(r.payload, r.at);
             break;
         case RXRuling::Reject:
             (void)self->connSend(conn, r.payload);

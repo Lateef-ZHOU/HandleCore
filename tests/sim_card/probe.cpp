@@ -1,3 +1,4 @@
+#include "../CallbackHandle.h"
 #include <SimCardHandle.h>
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -70,12 +71,12 @@ struct NoMoveInput { using Input = Generator; QByteArray synthesize(quint64, RxT
 static_assert(SimCardGenerator<Generator>);
 static_assert(!SimCardGenerator<NoInput> && !SimCardGenerator<NoSynthesis> && !SimCardGenerator<WrongReturn> &&
               !SimCardGenerator<NoDefault> && !SimCardGenerator<NoMoveInput>);
-class ProbeHandle final : public SimCardHandle<Generator>
+class ProbeHandle : public SimCardHandle<Generator>
 {
     Q_OBJECT
 public:
     using SimCardHandle::SimCardHandle;
-    ~ProbeHandle() override { stop(); }
+    ~ProbeHandle() override = default;
 Q_SIGNALS:
     void connectionChanged(HandleCore::ResourcePhase connected) override;
     void logMessage(const QString &text) const final;
@@ -92,7 +93,7 @@ static void windowsAndState()
     QByteArray received;
     RxTime receivedAt{};
     std::atomic<int> frames{0};
-    ProbeHandle handle([&](const QByteArray &data, RxTime at) {
+    CallbackHandle<ProbeHandle> handle([&](const QByteArray &data, RxTime at) {
         require(QThread::currentThread() != owner, "delivery ran on owner");
         { const std::lock_guard lock(gate); received = data; receivedAt = at; }
         ++frames;
@@ -170,7 +171,7 @@ static void shutdown()
     std::atomic<bool> delivered{false};
     std::atomic<quint64> deliveredId{0};
     int queries = 0;
-    auto handle = std::make_unique<ProbeHandle>([&](const QByteArray &frame, RxTime) {
+    auto handle = std::make_unique<CallbackHandle<ProbeHandle>>([&](const QByteArray &frame, RxTime) {
         deliveredId = read<quint64>(frame); delivered = true;
     });
     Params params;
@@ -188,7 +189,7 @@ static void shutdown()
     require(queries == 1, "late timer queried destroyed owner");
     for (int i = 0; i < 40; ++i)
     {
-        ProbeHandle immediate([](const QByteArray &, RxTime) {});
+        CallbackHandle<ProbeHandle> immediate([](const QByteArray &, RxTime) {});
         Params p; p.capture = [](RxTime, RxTime) -> std::optional<Input> { return {}; };
         require(immediate.start(p), "immediate start"); immediate.stop();
         require(!immediate.isOpen() && !immediate.isRunning(), "open/stop did not finish");
