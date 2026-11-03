@@ -1,10 +1,12 @@
 # HandleCore
 
-C++20 / Qt Core 通信与仿真执行库，供 Windows 和 Linux 的应用层共用。提供同步虚函数上传、连接重试及同步关闭机制，具体设备业务留在调用方。
+C++20 / Qt Core 通信库，供 Windows 和 Linux 的应用层共用。提供同步虚函数上传、连接重试及同步关闭机制，具体设备业务留在调用方。
 
-Core、Pcap 与 SimGimbal 为静态目标：Core 从 HandleBase.h 唯一生成 ResourcePhase 的 Qt 枚举元对象，后两者唯一生成信号实现；Handle、Serial 与 SimCard 的模板实现仍在头文件内。不生成额外 DLL，不依赖 QML、Qt Gui、Quick 或 Qt Test。所有可选模块默认关闭。
+Core 与 Pcap 为静态目标：Core 从 HandleBase.h 唯一生成 ResourcePhase 的 Qt 枚举元对象，后者唯一生成信号实现；Handle、Serial 的模板实现仍在头文件内。不生成额外 DLL，不依赖 QML、Qt Gui、Quick 或 Qt Test。所有可选模块默认关闭。
 
 自有代码采用 [MIT 许可证](LICENSE)，版权署名为周涛（ZHOU TAO）。第三方依赖保持各自许可证，使用与分发边界见 [第三方依赖说明](THIRD_PARTY_NOTICES.md)。
+
+仿真 Handle、内部协议及运动模型由 [SimGimbalDevice](https://github.com/Lateef-ZHOU/SimGimbalDevice) 和 [SimCardDevice](https://github.com/Lateef-ZHOU/SimCardDevice) 自行提供，不再属于本库。
 
 ## 模块和依赖
 
@@ -15,8 +17,6 @@ Core、Pcap 与 SimGimbal 为静态目标：Core 从 HandleBase.h 唯一生成 R
 | `Lidar::HandleCore` | 始终提供 | 基类、收发裁决、连接和关闭 |
 | `Lidar::Serial` | `HANDLECORE_WITH_SERIAL=ON` | libserialport >= 0.1.1；成帧与协议由应用接入 |
 | `Lidar::Pcap` | `HANDLECORE_WITH_PCAP=ON` | Linux libpcap >= 1.10.0；Windows Npcap SDK 及含 libpcap >= 1.10.0 的运行库 |
-| `Lidar::SimGimbal` | `HANDLECORE_WITH_SIM_GIMBAL=ON` | 无额外库；两轴运动与进程内命令 |
-| `Lidar::SimCard` | `HANDLECORE_WITH_SIM_CARD=ON` | 无额外库；固定窗口计时、强类型输入和合成器执行 |
 
 只有开启对应模块才查找其依赖。Serial 先使用 `libserialport::libserialport` Config 包，找不到时使用 pkg-config；两种入口均检查实际头文件版本，因此兼容没有 ConfigVersion 文件的包。Pcap 在 Linux 通过 pkg-config 检查版本，在 Windows 检查所选 wpcap.dll 内的 libpcap 版本，不能用 Npcap 产品版本替代。
 
@@ -42,24 +42,24 @@ Linux 也可用 `PKG_CONFIG_PATH` 指向自建依赖。Windows Pcap 将 Npcap SD
 
 ## 接入项目
 
-先选择模块，再引入库，最后链接所需目标。以下为只启用虚拟采集执行器的示例：
+先选择模块，再引入库，最后链接所需目标。以下为只启用串口的示例：
 
 ```cmake
 include(FetchContent)
-set(HANDLECORE_WITH_SIM_CARD ON)
+set(HANDLECORE_WITH_SERIAL ON)
 FetchContent_Declare(handlecore
     GIT_REPOSITORY "https://github.com/Lateef-ZHOU/HandleCore.git"
     GIT_TAG        "<已验证的完整提交 SHA>"
 )
 FetchContent_MakeAvailable(handlecore)
 
-target_link_libraries(my_app PRIVATE Lidar::SimCard)
+target_link_libraries(my_app PRIVATE Lidar::Serial)
 set_target_properties(my_app PROPERTIES AUTOMOC ON)
 ```
 
 公开源码位于 [Lateef-ZHOU/HandleCore](https://github.com/Lateef-ZHOU/HandleCore)。将示例中的 GIT_TAG 替换为已验证的完整提交 SHA，不跟随分支头，也不与 `GIT_SHALLOW` 混用。首次配置需要 Git 和访问 GitHub 的网络；拥有源码目录的调用方也可 `add_subdirectory`。
 
-Handle 的具体接收末端重写 `onData(const QByteArray &, RxTime)`，负责 `Q_OBJECT`、Qt 通知及析构首句 `stop()`；具体 Pcap/虚拟云台类型的 AUTOMOC 由本库负责，不再向消费者传播信号头作为编译源。应用无需包含旧项目的 Device、Collector 或模型。
+Handle 的具体接收末端重写 `onData(const QByteArray &, RxTime)`，负责 `Q_OBJECT`、Qt 通知及析构首句 `stop()`；具体 Pcap 类型的 AUTOMOC 由本库负责，不再向消费者传播信号头作为编译源。应用无需包含旧项目的 Device、Collector 或模型。
 
 ## 使用边界
 
@@ -67,9 +67,8 @@ Handle 的具体接收末端重写 `onData(const QByteArray &, RxTime)`，负责
 - `connectionChanged(HandleCore::ResourcePhase)` 区分资源阶段：每次打开前 AboutToAcquire、发布连接后 Acquired、撤销连接后 Released。主动 stop 在所属线程、促断前同步发 AboutToRelease，收尾发送和撤单只订阅此阶段；自动重连不发该阶段。完成通知可能排队，界面只回读实际状态，不从事件参数缓存连接状态。QThread::finished 仍表示线程结束，不能代替资源阶段。
 - 首次打开失败即退出，连接后的 I/O 失败按原机制重连。设备业务配置恢复由协议层或应用负责。
 - `RxTime` 直接使用 `std::chrono::system_clock::time_point`；Qt/QML 登记由应用决定。
-- Serial 成帧器、SimCard 合成器均按值随连接保存。SimCard 在所属线程取固定窗口快照，工作线程不回访 UI；风场、角度历史和功率谱算法不属于库。
+- Serial 成帧器按值随连接保存；协议与设备业务不属于库。
 - Pcap 使用单句柄，接收归 worker、实际发送归所属线程；单句柄读写是当前接受的使用约定。当前只处理既定 Ethernet/ARP/IPv4/UDP 格式，不支持 VLAN、其他链路头或分片重组。
-- 虚拟设备的 POD 命令仅用于同一进程，不是跨 ABI 的网络协议。
 
 完整参数、线程和模块契约见 [docs/reference.md](docs/reference.md)。
 
@@ -78,12 +77,12 @@ Handle 的具体接收末端重写 `onData(const QByteArray &, RxTime)`，负责
 本地与 GitHub Actions 使用同一个入口：
 
 ```text
-cmake "-DPROFILES=core;sim-gimbal;sim-card" "-DPREFIX_PATH=<Qt 前缀>" -P ci/verify.cmake
+cmake "-DPROFILES=core" "-DPREFIX_PATH=<Qt 前缀>" -P ci/verify.cmake
 ```
 
-提供 `core / serial / pcap / sim-gimbal / sim-card / all` 六种配置，每种使用独立构建目录。省略 PROFILES 时全部执行，需要准备全部依赖；可用 `BUILD_ROOT` 指定输出目录。
+提供 `core / serial / pcap / all` 四种配置，每种使用独立构建目录。省略 PROFILES 时全部执行，需要准备全部依赖；可用 `BUILD_ROOT` 指定输出目录。
 
-GitHub 托管 Windows 验证 Core 与两个仿真模块，托管 Linux 覆盖全部单模块和组合；预装依赖的 Windows runner 验证全部六种配置。后者默认不派发，通过手动输入或仓库变量启用，不在工作流里静默安装 Npcap。详见 [CI 与本地复现](docs/ci.md)，各提交的实际结果以 [Actions 记录](https://github.com/Lateef-ZHOU/HandleCore/actions/workflows/verify.yml) 为准；跳过不等于验证通过。
+GitHub 托管 Windows 验证 Core，托管 Linux 覆盖全部单模块和组合；预装依赖的 Windows runner 验证全部四种配置。后者默认不派发，通过手动输入或仓库变量启用，不在工作流里静默安装 Npcap。详见 [CI 与本地复现](docs/ci.md)，各提交的实际结果以 [Actions 记录](https://github.com/Lateef-ZHOU/HandleCore/actions/workflows/verify.yml) 为准；跳过不等于验证通过。
 
 ## 发布状态
 

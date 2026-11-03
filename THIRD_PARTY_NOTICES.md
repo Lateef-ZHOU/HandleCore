@@ -17,7 +17,7 @@
 | libpcap | Linux 上的 Pcap 模块 | BSD 三条款；保留所用版本的版权、条件与免责声明。[官方 LICENSE](https://github.com/the-tcpdump-group/libpcap/blob/master/LICENSE) |
 | Npcap SDK / 运行库 / 驱动 | Windows 上的 Pcap 模块 | Npcap 运行库/驱动采用独立许可，不是普通开源许可；SDK 及其文件按各自所附条款处理。[官方许可](https://npcap.com/license)、[SDK 开发说明](https://npcap.com/guide/npcap-devguide.html) |
 
-SimGimbal、SimCard 没有额外串口或 Pcap 依赖。所有可选模块默认关闭；仅启用仿真或串口不会引入 Npcap。Qt 和抓包发行包内还可能含其他第三方组件，须按实际包的归属清单保留对应声明，不能仅附本表。
+所有可选模块默认关闭；仅启用串口不会引入 Npcap。仿真代码及其 MIT 许可随源码迁入对应官邸仓库。Qt 和抓包发行包内还可能含其他第三方组件，须按实际包的归属清单保留对应声明，不能仅附本表。
 
 ## Qt Core 与 libserialport：LGPL 路线
 

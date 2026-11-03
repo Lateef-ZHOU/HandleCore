@@ -1,5 +1,11 @@
 # CI 与本地复现
 
+## 2026-11-03：仿真 Handle 迁回官邸（用户定）
+
+删除仿真模块开关、构建目标和 CI 配置；两个 Handle、内部协议、运动模型及对应测试迁入各自官邸。运行头与迁移前逐文件核对一致；测试主体不变。历史验证下文保留当时范围，当前 profile 为 core / serial / pcap / all。
+
+Windows Qt 6.11.2：剩余全模块与公开头构建通过，CTest 6/6；迁移后的虚拟云台 2/2、虚拟卡 1/1。Linux GCC 16.2.1 / Qt Core 6.8.3：Core 1/1、云台 2/2、虚拟卡 1/1，构建无编译警告；ldd 确认两个仿真探针的 Qt 依赖仅 Core。Linux 本轮未启用串口/Pcap。证据 Windows build-virtual-all/*-sim-move.log、两官邸 build-handle；Linux ~/.cache/lidar-sim-handle-move-20261103/*-{build,test}.log。未推送，未操作板卡或硬件。
+
 ## 2026-11-03：删除无调用方的串口选项接口（用户定）
 
 删除 availableBaudRates、availableDataBits、availableStopBits、availableParities、optionTexts、toString(BaudRate) 及无用 QStringList 头。保留 Bridge 使用的数据位、停止位、校验方式转换，保留枚举、端口枚举及连接参数。清理 UI 档位表旧注释；不改通信逻辑。
@@ -102,9 +108,9 @@ Windows MSVC / Qt 6.11.2 全模块 Release、独立头编译及 CTest 9/9 通过
 
 | 环境 | 自动配置 | 依赖来源 |
 |---|---|---|
-| GitHub Windows 2022 | core、sim-gimbal、sim-card | Qt 6.8.3 MSVC；只下载 qtbase |
-| GitHub Ubuntu 24.04 | core、serial、pcap、sim-gimbal、sim-card、all | Qt 6.8.3 qtbase + ICU；仅在需要时装 libserialport-dev / libpcap-dev |
-| 预置 Windows runner | 六种配置 | 已准备的 Qt、libserialport、Npcap SDK/运行库 |
+| GitHub Windows 2022 | core | Qt 6.8.3 MSVC；只下载 qtbase |
+| GitHub Ubuntu 24.04 | core、serial、pcap、all | Qt 6.8.3 qtbase + ICU；仅在需要时装 libserialport-dev / libpcap-dev |
+| 预置 Windows runner | 四种配置 | 已准备的 Qt、libserialport、Npcap SDK/运行库 |
 
 Qt 6.8.3 是当前支持下限；日常主项目仍使用自身 Qt 版本。Linux 官方 Qt 包的 ICU 属于工具链运行依赖，不能假定主机系统 ICU 恰好同版。Actions 均固定提交 SHA，权限仅 contents:read，不推送或发布产物；日志/JUnit 作为诊断附件保存。
 

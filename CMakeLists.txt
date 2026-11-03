@@ -44,31 +44,6 @@ if(HANDLECORE_WITH_PCAP)
     endif()
 endif()
 
-option(HANDLECORE_WITH_SIM_GIMBAL "Build the Qt Core simulated two-axis gimbal module and its tests" OFF)
-if(HANDLECORE_WITH_SIM_GIMBAL)
-    add_library(HandleSimGimbal STATIC)
-    set_target_properties(HandleSimGimbal PROPERTIES AUTOMOC ON)
-    if(MSVC)
-        target_compile_options(HandleSimGimbal PRIVATE /W4)
-    endif()
-    add_library(Lidar::SimGimbal ALIAS HandleSimGimbal)
-    target_sources(HandleSimGimbal PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/SimGimbalHandle.h"
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/SimGimbalProtocol.h"
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/GimbalMotion.h")
-    target_link_libraries(HandleSimGimbal PUBLIC Lidar::HandleCore)
-endif()
-
-option(HANDLECORE_WITH_SIM_CARD "Build the typed simulated acquisition executor and its tests" OFF)
-if(HANDLECORE_WITH_SIM_CARD)
-    add_library(HandleSimCard INTERFACE)
-    add_library(Lidar::SimCard ALIAS HandleSimCard)
-    target_sources(HandleSimCard INTERFACE
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/SimCardHandle.h"
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/SimCardProtocol.h")
-    target_link_libraries(HandleSimCard INTERFACE Lidar::HandleCore)
-endif()
-
 if(PROJECT_IS_TOP_LEVEL)
     include(CTest)
     if(BUILD_TESTING)
