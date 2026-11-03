@@ -59,12 +59,12 @@ set_target_properties(my_app PROPERTIES AUTOMOC ON)
 
 公开源码位于 [Lateef-ZHOU/HandleCore](https://github.com/Lateef-ZHOU/HandleCore)。将示例中的 GIT_TAG 替换为已验证的完整提交 SHA，不跟随分支头，也不与 `GIT_SHALLOW` 混用。首次配置需要 Git 和访问 GitHub 的网络；拥有源码目录的调用方也可 `add_subdirectory`。
 
-Handle 的具体接收末端重写 `onData(const QByteArray &, RxTime)`，负责 `Q_OBJECT`、Qt 通知及析构首句 `stop()`；具体 Pcap 类型的 AUTOMOC 由本库负责，不再向消费者传播信号头作为编译源。应用无需包含旧项目的 Device、Collector 或模型。
+Handle 的具体接收末端重写 `onData(const QByteArray &, RxTime)`，负责 `Q_OBJECT`、Qt 通知及析构首句 `close()`；具体 Pcap 类型的 AUTOMOC 由本库负责，不再向消费者传播信号头作为编译源。应用无需包含旧项目的 Device、Collector 或模型。
 
 ## 使用边界
 
-- 所属线程调用 `start/send/stop` 并运行事件循环；`onData` 在工作线程同步执行，回调所依赖的资源必须活到 `stop()` 返回。
-- `connectionChanged(HandleCore::ResourcePhase)` 区分资源阶段：每次打开前 AboutToAcquire、发布连接后 Acquired、撤销连接后 Released。主动 stop 在所属线程、促断前同步发 AboutToRelease，收尾发送和撤单只订阅此阶段；自动重连不发该阶段。完成通知可能排队，界面只回读实际状态，不从事件参数缓存连接状态。QThread::finished 仍表示线程结束，不能代替资源阶段。
+- 所属线程调用 `open/send/close` 并运行事件循环；`onData` 在工作线程同步执行，回调所依赖的资源必须活到 `close()` 返回。
+- `connectionChanged(HandleCore::ResourcePhase)` 区分资源阶段：每次打开前 AboutToAcquire、发布连接后 Acquired、撤销连接后 Released。主动 close 在所属线程、促断前同步发 AboutToRelease，收尾发送和撤单只订阅此阶段；自动重连不发该阶段。完成通知可能排队，界面只回读实际状态，不从事件参数缓存连接状态。QThread::finished 仍表示线程结束，不能代替资源阶段。
 - 首次打开失败即退出，连接后的 I/O 失败按原机制重连。设备业务配置恢复由协议层或应用负责。
 - `RxTime` 直接使用 `std::chrono::system_clock::time_point`；Qt/QML 登记由应用决定。
 - Serial 成帧器按值随连接保存；协议与设备业务不属于库。
@@ -89,3 +89,8 @@ GitHub 托管 Windows 验证 Core，托管 Linux 覆盖全部单模块和组合�
 本库以 **MIT 许可证公开发布源码**。Qt、libserialport、libpcap/Npcap 由使用环境提供，仓库不附带它们的 SDK、运行库或驱动。
 
 MIT 不代替依赖授权。随产品分发 Qt/libserialport 时须落实 LGPL 或相应授权要求；Linux libpcap 保留 BSD 声明；Windows Npcap 免费许可限制安装数量和再分发，未获授权时由用户从官方自行安装。完整边界见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+
+## 2026-11-04：Handle 连接入口统一（用户定）
+
+Handle 连接入口统一为 open(params)/close()；已连接换参仍同步关闭后重开，重复关闭、阶段通知及收发裁决保持。QThread::start 只在 open 内部使用，不作为外部连接入口。

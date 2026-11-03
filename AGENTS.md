@@ -20,3 +20,6 @@
 - Pcap（2026-10-24 用户定）：单句柄，worker 接收，实际发送全部归所属主线程；ARP 请求应答由 HandleBase 捕获 conn/r 排队；ARP 回应由 Pcap 捕获 conn/MAC 投递所属线程，统一学习并取走 pending 补发。PcapConn 扁平保存 deviceMAC/pending，发布前初始化、发布后仅所属线程读写，不使用 ArpState/原子/CAS。worker 排队回复前 detach 字节；主线程下发须交可按值保活的 QByteArray，pending 直接隐式共享，不重复 detach。原连接强持到队列项释放；执行时直接通过捕获的原连接发送，不复查当前连接；停止或重连不撤销已排队的回复，Handle 销毁移除队列项。每条回复仅投递一次。单句柄读写为已接受的假设，不新增第二个句柄。模块要求 libpcap >= 1.10.0，Windows 检查 Npcap 内 libpcap 版本；VLAN 等协议扩展暂缓。表单适配留在消费项目，首连失败退出、后续失败重连及同步关闭保持。
 
 - 2026-11-03 用户定：两个仿真 Handle、内部协议、运动模型和测试分别归 SimGimbalDevice / SimCardDevice；本库删除仿真选项和目标，仅保留 Core、Serial、Pcap。
+
+
+2026-11-04 用户定：Handle 连接入口统一 open/close，内部仍用 QThread::start，外部不使用线程启动口替代连接。Device/Bridge/官邸和验证同步调用名，无兼容薄转发，重连、关闭、阶段通知与裁决保持。Windows Qt 6.11.2/MSVC 独立增量构建、公开头编译及 CTest 6/6 通过（build-virtual-all/open-close-build.log）；本轮未做 Linux/ARM 或硬件验证，未推送。

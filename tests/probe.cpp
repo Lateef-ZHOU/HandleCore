@@ -62,7 +62,7 @@ class CoreHandle final : public Handle<Params, Connection>
 public:
     CoreHandle(std::shared_ptr<State> state, std::function<void(const QByteArray &, RxTime)> callback)
         : state_(std::move(state)), callback_(std::move(callback)) {}
-    ~CoreHandle() override { stop(); }
+    ~CoreHandle() override { close(); }
 Q_SIGNALS:
     void connectionChanged(HandleCore::ResourcePhase) override;
     void logMessage(const QString &) const override;
@@ -154,19 +154,19 @@ void dispatchAndSignals()
         require(QThread::currentThread() == ownerThread, "log receiver not on owner thread");
         ++logs;
     });
-    handle.stop();
+    handle.close();
     require(!handle.send("offline"), "disconnected send accepted");
-    require(handle.start(Params{state}), "start rejected");
+    require(handle.open(Params{state}), "start rejected");
     acquire(state->processed);
     require(state->sent.empty(), "reply sent before owner event delivery");
     state->input[2].fill('x'); // 模拟底层复用已经上交的借用缓冲。
     QCoreApplication::sendPostedEvents(&handle, QEvent::MetaCall);
-    require(handle.isOpen() && !handle.start(Params{state}), "duplicate start accepted");
+    require(handle.isOpen() && !handle.open(Params{state}), "duplicate start accepted");
     require(handle.send("command") && !handle.send("drop"), "TX ruling changed");
     state->sendSucceeds = false; // 收包已停在 leaveLoop，只由当前线程发送。
     require(!handle.send("failure"), "send failure swallowed");
-    handle.stop();
-    handle.stop();
+    handle.close();
+    handle.close();
     QCoreApplication::sendPostedEvents(&receiver, QEvent::MetaCall);
     require(connected == 1 && disconnected == 1 && logs >= 2, "Qt Core signal delivery failed");
     require(state->callbacks == 1 && state->closes == 1 && !handle.isRunning() && !handle.isOpen(),
@@ -186,14 +186,14 @@ void stopDuringCallback()
         state->callbackActive = false;
         ++state->callbacks;
     });
-    require(handle.start(Params{state}), "callback probe start rejected");
+    require(handle.open(Params{state}), "callback probe start rejected");
     acquire(state->callbackEntered);
     std::jthread release([state] {
         acquire(state->breaking);
         require(state->callbackActive, "callback unexpectedly exited before stop");
         state->allowCallback.release();
     });
-    handle.stop();
+    handle.close();
     require(!state->callbackActive && state->callbacks == 1 && state->closes == 1,
             "stop returned before callback/resource completion");
 }
@@ -203,13 +203,13 @@ void stopDuringOpen()
     auto state = std::make_shared<State>();
     state->delayOpen = true;
     CoreHandle handle(state, [](const QByteArray &, RxTime) { qFatal("unexpected callback"); });
-    require(handle.start(Params{state}), "open probe start rejected");
+    require(handle.open(Params{state}), "open probe start rejected");
     acquire(state->opening);
     std::jthread release([state] {
         acquire(state->breaking);
         state->allowOpen.release();
     });
-    handle.stop();
+    handle.close();
     require(state->loops == 0 && state->closes == 1 && !handle.isOpen(), "early stop lost or leaked");
 }
 
@@ -222,8 +222,8 @@ void reconnectAndInitialFailure()
     QObject receiver;
     QObject::connect(&failure, &CoreHandle::connectionChanged, &receiver,
                      [&](HandleCore::ResourcePhase phase) { if (phase != HandleCore::ResourcePhase::AboutToAcquire) ++failureNotifications; });
-    require(failure.start(Params{failed}) && failure.wait(5000), "initial failure did not finish");
-    failure.stop();
+    require(failure.open(Params{failed}) && failure.wait(5000), "initial failure did not finish");
+    failure.close();
     QCoreApplication::sendPostedEvents(&receiver, QEvent::MetaCall);
     require(failed->opens == 1 && failed->loops == 0 && failureNotifications == 0,
             "initial failure semantics changed");
@@ -235,10 +235,10 @@ void reconnectAndInitialFailure()
     QObject::connect(&handle, &CoreHandle::connectionChanged, &receiver,
                      [&](HandleCore::ResourcePhase phase) { if (phase == HandleCore::ResourcePhase::Acquired) ++connected;
         if (phase == HandleCore::ResourcePhase::Released) ++disconnected; });
-    require(handle.start(Params{state}), "reconnect probe start rejected");
+    require(handle.open(Params{state}), "reconnect probe start rejected");
     acquire(state->entered);
     require(state->opens == 2 && state->closes == 1 && handle.isOpen(), "reconnect failed");
-    handle.stop();
+    handle.close();
     QCoreApplication::sendPostedEvents(&receiver, QEvent::MetaCall);
     require(connected == 2 && disconnected == 2 && state->closes == 2,
             "reconnect notifications or cleanup changed");
@@ -257,17 +257,17 @@ void synchronousDisconnect()
         require(handle.send("off"), "disconnect receiver cannot send final command");
         ++disconnected;
     });
-    require(handle.start({state}), "disconnect probe start rejected");
+    require(handle.open({state}), "disconnect probe start rejected");
     acquire(state->entered);
-    handle.stop();
+    handle.close();
     require(disconnected == 1 && !handle.isOpen(), "stop must notify synchronously then release");
     acquire(state->breaking);
-    require(handle.start({state}), "immediate reopen rejected");
+    require(handle.open({state}), "immediate reopen rejected");
     acquire(state->entered);
     QCoreApplication::sendPostedEvents(&receiver, QEvent::MetaCall);
     require(disconnected == 1 && handle.isOpen(), "old disconnect reached new connection");
-    handle.stop();
-    handle.stop();
+    handle.close();
+    handle.close();
     require(disconnected == 2 && state->sent == std::vector<QByteArray>{"tx:off", "tx:off"},
             "repeated stop duplicated final command");
 }
@@ -292,10 +292,10 @@ void releasePhasesAndRetainedConnection()
         if (phase == Phase::Released)
             require(!handle.isOpen(), "Released must revoke publication even while another share exists");
     }, Qt::DirectConnection);
-    require(handle.start({state}), "phase probe rejected start");
+    require(handle.open({state}), "phase probe rejected start");
     acquire(state->entered);
-    handle.stop();
-    handle.stop();
+    handle.close();
+    handle.close();
     require(phases == std::vector<Phase>{Phase::AboutToAcquire, Phase::Acquired,
         Phase::AboutToRelease, Phase::Released}, "resource phase order or stop idempotence changed");
     require(state->closes == 0 && !handle.isOpen() && !handle.send("late"), "retained old resource admitted a send");

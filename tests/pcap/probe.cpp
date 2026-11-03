@@ -36,7 +36,7 @@ PcapParams params(bool seeded = false)
 MAC peer() { bool ok = false; return MAC::fromString("02:00:00:00:00:02", ok); }
 void open(PcapHandle &h, const PcapParams &p)
 {
-    require(h.start(p), "start rejected"); until([&] { return h.isOpen(); }, false);
+    require(h.open(p), "start rejected"); until([&] { return h.isOpen(); }, false);
 }
 void queuedArpAndUdp()
 {
@@ -53,7 +53,7 @@ void queuedArpAndUdp()
     auto s = FakePcap::last();
     require(s->snaplen == 65536 && s->promisc == 1 && s->timeout == 20 && s->buffer == (4 << 20)
             && s->name == "test0" && !s->filter.isEmpty(), "connection configuration changed");
-    require(!h.start(p), "duplicate start accepted");
+    require(!h.open(p), "duplicate start accepted");
     require(h.send("first") && h.send("latest"), "ARP probe not accepted");
     require(FakePcap::sent().size() == 2, "ARP probe count changed");
     const ARPRequest request(p.host.macAddress, p.hostIPv4, p.deviceIPv4);
@@ -77,7 +77,7 @@ void queuedArpAndUdp()
     FakePcap::failSend = true;
     require(!h.send("failure"), "send failure not returned");
     for (const auto &sent : FakePcap::sent()) require(sent.thread == owner, "send ran outside owner thread");
-    h.stop(); h.stop(); require(s->closed && !h.send("offline"), "stop did not release connection");
+    h.close(); h.close(); require(s->closed && !h.send("offline"), "stop did not release connection");
 }
 void capturedReplies()
 {
@@ -101,7 +101,7 @@ void capturedReplies()
                 FakePcap::fail(old);
                 until([&] { return FakePcap::opens() == 2 && h.isOpen(); }, false);
             }
-            else { h.stop(); open(h, p); }
+            else { h.close(); open(h, p); }
             require(!old->closed, "queued reply lost its captured connection");
             QCoreApplication::processEvents();
             require(old->closed, "completed queued reply leaked its connection");
@@ -116,7 +116,7 @@ void capturedReplies()
                     "queued reply did not use its captured connection and bytes on the owner thread");
             require(h.send("fresh") && kindOf(FakePcap::sent().back().bytes) == FrameKind::ARPRequest,
                     "replacement connection reused ARP state");
-            h.stop();
+            h.close();
         }
         FakePcap::reset();
         {
@@ -165,7 +165,7 @@ void ownerArpLearning()
             "learned MAC was not used for direct send");
     for (const auto &sent : FakePcap::sent())
         require(sent.thread == QThread::currentThread(), "ARP send escaped owner thread");
-    h.stop();
+    h.close();
 }
 void openFailuresAndStop()
 {
@@ -173,7 +173,7 @@ void openFailuresAndStop()
     {
         FakePcap::reset(); FakePcap::failStage = stage;
         CallbackHandle<PcapHandle> h([](const QByteArray &, RxTime) {});
-        require(h.start(params()) && h.wait(2000) && !h.isOpen(), "first open failure retried or stayed online");
+        require(h.open(params()) && h.wait(2000) && !h.isOpen(), "first open failure retried or stayed online");
         require(FakePcap::opens() == (stage == 1 ? 0u : 1u), "first failure opened multiple handles");
         if (stage > 1) require(FakePcap::last()->closed, "partly opened handle leaked");
         require(FakePcap::freeCodes == (stage == 8 ? 1 : 0), "filter ownership leak");
@@ -187,7 +187,7 @@ void openFailuresAndStop()
     FakePcap::inject(s, UDPDatagram(p.host.macAddress, peer(), p.deviceIPv4, p.hostIPv4, p.devicePort, p.hostPort, "wait"));
     require(entered.tryAcquire(1, 2000), "receive callback did not enter");
     std::jthread releaser([&] { QThread::msleep(40); require(!s->closed, "connection closed during callback"); release.release(); });
-    h.stop(); require(s->closed && s->delivered == 1, "stop returned before callback finished");
+    h.close(); require(s->closed && s->delivered == 1, "stop returned before callback finished");
 }
 int main(int argc, char **argv)
 {

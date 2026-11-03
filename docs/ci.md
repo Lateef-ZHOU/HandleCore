@@ -183,3 +183,6 @@ Windows MSVC / Qt 6.11.2：build-virtual-all 全模块 Release、公开头 /W4 /
 删除 SerialConn 重复复制禁令、两个测试的无效构造继承声明，纠正串口描述用途注释。补齐不可复制构造、复制赋值、移动构造、移动赋值四项 static_assert；收发、重连和关闭代码不变。
 
 Windows/MSVC/Qt 6.11.2：build-virtual-all Release 增量构建成功，CTest 6/6（4.86 秒）。主程序以相邻源码覆盖接入，增量 Release 构建与八秒离屏冒烟通过，仅既有 FT_New_Face 提示。证据：build-virtual-all/{build,test}-serial-cleanup.log，LiDAR_DataACQ/build/build-serial-cleanup.log、smoke-serial-cleanup.json。未测 Linux、ARM 或实物，本轮不推送。
+
+
+2026-11-04 用户定：Handle 连接入口统一 open/close，内部仍用 QThread::start，外部不使用线程启动口替代连接。Device/Bridge/官邸和验证同步调用名，无兼容薄转发，重连、关闭、阶段通知与裁决保持。Windows Qt 6.11.2/MSVC 独立增量构建、公开头编译及 CTest 6/6 通过（build-virtual-all/open-close-build.log）；本轮未做 Linux/ARM 或硬件验证，未推送。

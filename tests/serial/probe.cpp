@@ -97,8 +97,8 @@ int main(int argc, char **argv)
     QStringList logs;
     QObject::connect(&handle, &LineHandle::connectionChanged, &app, [&](HandleCore::ResourcePhase phase) { if (phase == HandleCore::ResourcePhase::Acquired) ++connections; if (phase == HandleCore::ResourcePhase::Released) connections += 10; });
     QObject::connect(&handle, &LineHandle::logMessage, &app, [&](const QString &text) { logs.push_back(text); });
-    require(handle.start(params) && until([&] { return handle.isOpen(); }), "open failed");
-    require(!handle.start(params), "duplicate start accepted");
+    require(handle.open(params) && until([&] { return handle.isOpen(); }), "open failed");
+    require(!handle.open(params), "duplicate start accepted");
     require(baudRate() == 230400 && flowControl() == SP_FLOWCONTROL_RTSCTS, "explicit serial config lost");
     enqueue("one\ntwo\npar");
     require(until([&] { return receivedCount() == 2; }), "burst frames wait for next read");
@@ -131,7 +131,7 @@ int main(int argc, char **argv)
     require(until([&] { return opens() == 2 && handle.isOpen(); }), "I/O failure did not reconnect");
     enqueue("fresh\n");
     require(until([&] { return receivedCount() == 5; }), "new connection did not receive");
-    handle.stop(); handle.stop();
+    handle.close(); handle.close();
     QCoreApplication::processEvents();
     require(received == std::vector<QByteArray>{"one", "two", "partial", "queued-marker", "fresh"}, "framer state leaked across connections");
     require(connections == 22 && livePorts() == 0 && closes() == 2, "each connection must announce acquisition and release");
@@ -139,12 +139,12 @@ int main(int argc, char **argv)
     require(logs.count("串口发送失败") == 3, "send failure log missing or duplicated");
 
     reset(); failOpen(true);
-    require(handle.start(params) && handle.wait(2000), "first-open failure did not exit");
-    handle.stop();
+    require(handle.open(params) && handle.wait(2000), "first-open failure did not exit");
+    handle.close();
     require(opens() == 1 && livePorts() == 0, "first-open failure retried or leaked");
     reset(); failConfiguration(true);
-    require(handle.start(params) && handle.wait(2000), "config failure did not exit");
-    handle.stop();
+    require(handle.open(params) && handle.wait(2000), "config failure did not exit");
+    handle.close();
     require(closes() == 1 && livePorts() == 0, "partial open leaked");
 
     reset();
@@ -152,10 +152,10 @@ int main(int argc, char **argv)
     std::atomic<bool> callbackDone{false};
     {
         CallbackHandle<LineHandle> delayed([&](const QByteArray &, RxTime) { entered.release(); leave.acquire(); callbackDone = true; });
-        require(delayed.start(params) && until([&] { return delayed.isOpen(); }), "delayed open failed");
+        require(delayed.open(params) && until([&] { return delayed.isOpen(); }), "delayed open failed");
         enqueue("wait\n"); require(entered.tryAcquire(1, 2000), "callback not entered");
         std::thread unblock([&] { QThread::msleep(30); leave.release(); });
-        delayed.stop();
+        delayed.close();
         require(callbackDone, "stop returned before callback exit");
         unblock.join();
     }

@@ -8,7 +8,7 @@ class CallbackHandle final : public Transport
 {
 public:
     explicit CallbackHandle(std::function<void(const QByteArray &, RxTime)> callback) : callback_(std::move(callback)) {}
-    ~CallbackHandle() override { this->stop(); }
+    ~CallbackHandle() override { this->close(); }
 private:
     void onData(const QByteArray &data, RxTime at) override { callback_(data, at); }
     const std::function<void(const QByteArray &, RxTime)> callback_;

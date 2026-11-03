@@ -89,7 +89,7 @@ private:
     Framer framer_; // 仅收包线程访问；连接释放即清除协议缓冲和时间记录。
 };
 
-// 通用串口层只实现连接及 I/O；协议必须实现 RX/TX 和通知，末端析构首句 stop。
+// 通用串口层只实现连接及 I/O；协议必须实现 RX/TX 和通知，末端析构首句 close。
 template <SerialFramer Framer>
 class SerialHandle : public Handle<SerialParams, SerialConn<Framer>>
 {
