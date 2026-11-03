@@ -1,5 +1,12 @@
 # CI 与本地复现
 
+## 2026-11-03：删除无调用方的串口选项接口（用户定）
+
+删除 availableBaudRates、availableDataBits、availableStopBits、availableParities、optionTexts、toString(BaudRate) 及无用 QStringList 头。保留 Bridge 使用的数据位、停止位、校验方式转换，保留枚举、端口枚举及连接参数。清理 UI 档位表旧注释；不改通信逻辑。
+
+Windows/MSVC/Qt 6.11.2 全模块增量 Release、公开头编译及 CTest 9/9（12.51 秒）通过，无 C++ 编译诊断。证据 build-virtual-all/{build,test}-serial-options.log。未重编 Bridge，已核对其三处调用与保留签名一致；未测 Linux、ARM 或硬件，未推送。
+
+
 ## 2026-11-03：删除串口发送互斥（用户定）
 
 删除 SerialConn::send 的 lock_guard、writeGate_ 成员与 mutex 头文件。主动发送及 HandleBase 排队的 Reject 回复均由所属主线程串行执行，不再保留连接级写锁；收包、重连、关闭和发送结果判断保持。当前契约与维护约束已同步，下方写互斥记录为历史。

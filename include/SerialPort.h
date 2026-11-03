@@ -1,7 +1,6 @@
 #pragma once
 #include <QList>
 #include <QString>
-#include <QStringList>
 #include <QtGlobal>
 #include <libserialport.h>
 
@@ -32,28 +31,7 @@ enum class StopBits : int
     Two = 2, // libserialport 只收 1/2（无 1.5）——档位即枚举全集
 };
 
-[[nodiscard]] inline QList<BaudRate> availableBaudRates()
-{
-    return {BaudRate::B1200, BaudRate::B2400, BaudRate::B4800, BaudRate::B9600,
-            BaudRate::B19200, BaudRate::B38400, BaudRate::B57600, BaudRate::B115200};
-}
-
-[[nodiscard]] inline QList<DataBits> availableDataBits()
-{
-    return {DataBits::D5, DataBits::D6, DataBits::D7, DataBits::D8};
-}
-
-[[nodiscard]] inline QList<StopBits> availableStopBits() { return {StopBits::One, StopBits::Two}; }
-
-[[nodiscard]] inline QList<sp_parity> availableParities()
-{
-    return {SP_PARITY_NONE, SP_PARITY_EVEN, SP_PARITY_ODD, SP_PARITY_MARK, SP_PARITY_SPACE};
-}
-
-// ------------------------------------------------------------
-// 常用档位的显示文本；界面可以使用这些选项，连接波特率不受此列表限制。
-// ------------------------------------------------------------
-[[nodiscard]] inline QString toString(const BaudRate v) { return QString::number(qToUnderlying(v)); }
+// 线路规格的文本表示，供 Bridge 等调用方列出设备配置。
 [[nodiscard]] inline QString toString(const DataBits v) { return QString::number(qToUnderlying(v)); }
 [[nodiscard]] inline QString toString(const StopBits v) { return QString::number(qToUnderlying(v)); }
 [[nodiscard]] inline QString toString(const sp_parity v)
@@ -67,18 +45,6 @@ enum class StopBits : int
     case SP_PARITY_SPACE: return QStringLiteral("Space");
     default: return {};
     }
-}
-
-// 一张档位表 → 一张字符串表。界面与日志读的是**同一份**（下拉第 i 项与日志里那个名字
-// 必然一致，因为就是同一个 QStringList 的同一个下标）。
-template <typename T>
-[[nodiscard]] QStringList optionTexts(const QList<T> &options)
-{
-    QStringList texts;
-    texts.reserve(options.size());
-    for (const T v : options)
-        texts << toString(v);
-    return texts;
 }
 
 // ------------------------------------------------------------
