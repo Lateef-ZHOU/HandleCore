@@ -1,5 +1,12 @@
 # CI 与本地复现
 
+## 2026-11-03：串口发送只返回成功与否（用户定）
+
+删除 send 的错误输出参数；完整写入返回 true，短写和底层错误返回 false，由 Handle 统一记录一次“串口发送失败”。不返回或缓存错误详情，替代下方上一轮的详细诊断接口；收发、重连与关闭逻辑保持。
+
+Windows/MSVC/Qt 6.11.2 全模块 Release、公开头编译及 CTest 9/9（12.52 秒）通过，无 C++ 编译诊断；覆盖完整写入、短写、零字节超时、底层错误及失败日志次数。证据 build-virtual-all/{build,test}-serial-bool.log。未测 Linux、ARM 或硬件，未推送。
+
+
 ## 2026-11-03：串口连接层判断发送结果（用户定）
 
 SerialConn::write 改为 bool send(data, error)，完整写入才返回 true；负错误码与短写诊断由连接层生成，经 QString 输出参数交 Handle 发一次日志。connSend 只检查空连接、调用 send 并报告失败，删除字节数二次判断；不增加错误缓存、日志回调或发送重试。loop/breakLoop、写互斥和关闭逻辑保持。
