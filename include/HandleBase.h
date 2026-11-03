@@ -51,7 +51,10 @@ public:
         if (isOpen() && params_ != params)
             stop();
         if (isRunning())
+        {
+            Q_EMIT logMessage(QStringLiteral("连接线程已在运行，本次启动请求未提交"));
             return false;
+        }
         params_ = params;
         QThread::start();
         return true;

@@ -52,13 +52,6 @@ public:
     using Handle::Handle;
     ~PcapHandle() override = default;
 
-    bool start(const PcapParams &params)
-    {
-        if (Handle::start(params)) return true;
-        Q_EMIT logMessage(QStringLiteral("连接线程已在运行，本次请求未提交；更换参数请先断开再连接"));
-        return false;
-    }
-
 Q_SIGNALS:
     void connectionChanged(HandleCore::ResourcePhase connected) override;
     void logMessage(const QString &text) const final;

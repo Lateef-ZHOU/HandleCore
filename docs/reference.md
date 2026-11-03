@@ -30,7 +30,7 @@ Makefiles 等单配置生成器在配置时加 `-DCMAKE_BUILD_TYPE=Release`。Wi
 ## 当前接口契约
 
 - 参数直接使用模板参数 `ParamT`，连接直接使用 `ConnT`，不公开同义类型别名或另设参数 concept；默认构造、赋值和比较由实际使用处编译检查。`HandleLike` 仅从公开继承关系判断 Handle 族归属，不依赖子类提供别名。
-- 所属线程调用 `start(params)`、`send(payload)`、`stop()`，其他线程可观察 `isOpen()`。继承的 QThread 启停方法不替代 Handle 生命周期入口。
+- 所属线程调用 `start(params)`、`send(payload)`、`stop()`，其他线程可观察 `isOpen()`。继承的 QThread 启停方法不替代 Handle 生命周期入口。 `start` 的运行中拒绝统一由基类记录失败日志，Pcap 不另设同名转发；已连接且参数不同时仍自动停止并重启。
 - 默认构造由编译器生成，不可复制/移动沿用 QThread/QObject 基类约束，本层不重复声明复制禁令或默认构造函数。接收方派生并重写纯虚 `onData(const QByteArray &, RxTime)`，在收包线程同步执行。字节可能借用外部缓冲；异步留存者负责数据所有权，RxTime 可按值复制。
 - Handle 不再持有外部上传回调；内部连接循环回调 由私有静态 makeDispatch 在每轮 connLoop 前现场生成，不存固定派发闭包成员。虚拟云台将回调移入 Qt 定时器槽，虚拟采集将结果交付函数移入连接；串口/Pcap 在同步收包栈上借用回调。接收方仍须遵守 stop 返回前退出在途回调的契约。
 - 一次 `onRX` 产生一项裁决：Decode 在收包线程同步上交，Reject 由 HandleBase 捕获 conn 和 r 后排队到所属线程直接调用 connSend，Drop 无动作。Reject 排队前 detach 裁决字节，避免借用缓冲失效；执行时直接使用捕获的原连接，不复查当前连接，不重新经过 onTX。停止或重连不撤销已排队回复，实际发送结果由 connSend 处理。队列项强持原连接到执行或销毁，stop 仍等待收包退出，但不排空回复队列或保证其持有资源已经释放。`onTX` 的 Encode 交给 `connSend`，Drop 返回失败。

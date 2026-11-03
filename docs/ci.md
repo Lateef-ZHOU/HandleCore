@@ -1,5 +1,11 @@
 # CI 与本地复现
 
+## 2026-11-03 删除 Pcap 启动转发（用户定）
+
+删除 PcapHandle::start，直接继承基类入口；运行中拒绝日志放入 Handle::start 的既有 isRunning 分支，删除要求手动断开才能更换参数的错误提示。不改自动重启、重连和关闭逻辑。
+
+Windows/MSVC/Qt 6.11.2 全模块 Release、公开头编译及既有 CTest 9/9（11.32 秒）通过，无 C++ 编译警告；证据 build-virtual-all/{build,test}-start-entry.log。本轮未重跑 Linux、ARM 或实物验证，仅本地提交。
+
 ## 2026-11-03 排队回复直接使用捕获连接（用户定）
 
 删除 Reject 队列中的当前连接身份判断，保留 r.detach()、conn/r 按值捕获和所属线程 connSend。停止或重连不撤销已排队回复，仍向被保活的原连接尝试发送；Handle 销毁移除队列项。不改重连、关闭或裁决流程。此裁定替代下方上一轮的旧回复丢弃策略。
