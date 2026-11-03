@@ -1,5 +1,12 @@
 # CI 与本地复现
 
+## 2026-11-03：资源枚举合入 HandleBase（用户定）
+
+ResourcePhase 及 Qt namespace/元类型登记移入 HandleBase.h 的模板外部，删除独立头与构建引用；静态 Core 目标仍唯一生成元对象，枚举名称、数值及阶段行为保持。单头编译只保留 HandleBase，核心探针新增命名空间与四个枚举值的元对象检查。
+
+Windows/MSVC/Qt 6.11.2 全模块 Release、公开头编译与 CTest 9/9（12.54 秒）通过。证据 build-virtual-all/{build,test}-phase-header.log。未测 Linux、ARM 或硬件，未推送。
+
+
 ## 2026-11-03：主线程下发保持隐式共享（用户定）
 
 删除 pending.detach()；主线程下发须提供可按 QByteArray 值语义保活的数据，pending 直接共享。worker 借用接收缓冲跨线程投递时取得所有权，HandleBase 的 Reject 排队前 r.detach() 保留；不增加所有权检测或状态。替代下方上一轮 pending 接受临时借用源的契约。

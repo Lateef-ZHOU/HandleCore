@@ -2,7 +2,7 @@
 
 C++20 / Qt Core 通信与仿真执行库，供 Windows 和 Linux 的应用层共用。提供同步虚函数上传、连接重试及同步关闭机制，具体设备业务留在调用方。
 
-Core、Pcap 与 SimGimbal 为静态目标：Core 唯一生成 ResourcePhase 的 Qt 枚举元对象，后两者唯一生成信号实现；Handle、Serial 与 SimCard 的模板实现仍在头文件内。不生成额外 DLL，不依赖 QML、Qt Gui、Quick 或 Qt Test。所有可选模块默认关闭。
+Core、Pcap 与 SimGimbal 为静态目标：Core 从 HandleBase.h 唯一生成 ResourcePhase 的 Qt 枚举元对象，后两者唯一生成信号实现；Handle、Serial 与 SimCard 的模板实现仍在头文件内。不生成额外 DLL，不依赖 QML、Qt Gui、Quick 或 Qt Test。所有可选模块默认关闭。
 
 自有代码采用 [MIT 许可证](LICENSE)，版权署名为周涛（ZHOU TAO）。第三方依赖保持各自许可证，使用与分发边界见 [第三方依赖说明](THIRD_PARTY_NOTICES.md)。
 

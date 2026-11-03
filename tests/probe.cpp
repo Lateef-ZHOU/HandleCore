@@ -7,6 +7,7 @@
 #include <vector>
 #include <QCoreApplication>
 #include <QEvent>
+#include <QMetaEnum>
 
 #if defined(QT_GUI_LIB) || defined(QT_QML_LIB) || defined(QT_QUICK_LIB) || defined(QT_TESTLIB_LIB)
 #error The Handle core probe must depend on Qt Core only
@@ -305,6 +306,14 @@ void releasePhasesAndRetainedConnection()
 int main(int argc, char **argv)
 {
     QCoreApplication application(argc, argv);
+    const auto phase = QMetaEnum::fromType<HandleCore::ResourcePhase>();
+    require(phase.isValid() && phase.keyCount() == 4
+            && QByteArray(phase.scope()) == "HandleCore"
+            && phase.keyToValue("AboutToAcquire") == 0
+            && phase.keyToValue("Acquired") == 1
+            && phase.keyToValue("AboutToRelease") == 2
+            && phase.keyToValue("Released") == 3,
+            "resource phase namespace metadata changed");
     dispatchAndSignals();
     stopDuringCallback();
     stopDuringOpen();

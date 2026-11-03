@@ -9,7 +9,7 @@ Handle 按通信方式和协议复用，不按 Windows 设备或 Linux 设备划
 ## 依赖与使用
 
 - CMake 3.28 或以上、C++20、Qt Core >= 6.8.3；核心目标不依赖 QML、Gui、Quick、Qt Test、Npcap、libserialport 或应用 Device/Collector。可选串口目标额外依赖 libserialport，Pcap 模块额外依赖 libpcap >= 1.10.0（Windows 使用 Npcap）。
-- `HandleCore` 是静态目标，别名为 `Lidar::HandleCore`；模板实现保留在头文件，目标唯一生成 ResourcePhase 的 Qt namespace 元对象。使用方链接该目标取得头文件路径、C++20 与 Qt Core 依赖，无额外 DLL，也不链接 QML。
+- `HandleCore` 是静态目标，别名为 `Lidar::HandleCore`；模板实现保留在头文件，枚举及 Qt 登记与模板共同定义在 HandleBase.h，目标唯一生成 ResourcePhase 的 Qt namespace 元对象。使用方链接该目标取得头文件路径、C++20 与 Qt Core 依赖，无额外 DLL，也不链接 QML。
 - 独立调用方包含 `<HandleBase.h>`。基类的 `RxTime` 直接别名到 `std::chrono::system_clock::time_point`；应用自己的 `RxTime.h` 仍负责 Qt 元类型及 QML 登记，二者没有类型包装或转换。
 - 需要 Qt 信号的具体类型使用 `Q_OBJECT` / `Q_SIGNALS` 并启用 AUTOMOC；模板基类只声明纯虚通知函数，不依赖 QML，也不替具体类登记信号。
 
