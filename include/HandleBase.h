@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <QByteArray>
+#include <QMetaObject>
 #include <QSemaphore>
 #include <QString>
 #include <QThread>
@@ -175,7 +176,7 @@ private:
     // 所属线程打断收包并撤销待处理请求；打开期间/重连间隙可能传空连接。
     virtual void connBreak(std::shared_ptr<ConnT> h) const = 0;
 
-    // 所属线程发送与收包线程应答共用；实现负责判空、失败日志与 I/O 并发安全。
+    // 所属线程执行主动发送与排队应答；实现负责判空、失败日志及实际传输。
     [[nodiscard]] virtual bool connSend(std::shared_ptr<ConnT> h, const QByteArray &data) const = 0;
 
     // onRX 在收包线程执行，连接非空，产物时刻由协议决定。
@@ -199,14 +200,20 @@ Handle<ParamT, ConnT>::makeDispatch(Handle<ParamT, ConnT> *self)
 {
     return [self](std::shared_ptr<ConnT> conn, const QByteArray &raw, const RxTime at)
     {
-        const RXRuling r = self->onRX(raw, at, conn);
+        RXRuling r = self->onRX(raw, at, conn);
         switch (r.act)
         {
         case RXRuling::Decode:
             self->onData(r, r.at);
             break;
         case RXRuling::Reject:
-            (void)self->connSend(conn, r);
+            // 裁决可能借用接收缓冲；排队前取得字节所有权，连接随队列项保活。
+            r.detach();
+            QMetaObject::invokeMethod(self, [self, conn, r] {
+                // 停止/重连已撤销原连接时丢弃旧回复，不把它发给新连接。
+                if (self->conn_.load().lock() == conn)
+                    (void)self->connSend(conn, r);
+            }, Qt::QueuedConnection);
             break;
         case RXRuling::Drop:
             break;

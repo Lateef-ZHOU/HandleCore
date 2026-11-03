@@ -1,5 +1,11 @@
 # CI 与本地复现
 
+## 2026-11-03 Reject 统一投递所属线程（用户定）
+
+HandleBase 捕获 conn/r，通过绑定自身上下文的 QueuedConnection 直接调用 connSend；排队前 detach 字节，执行前核对原连接身份，禁止停止/重连后的旧回复发送。删除 Pcap 二次投递。队列强持连接至执行或销毁，stop 不排空队列；重连、促断、wait 和裁决种类保持。
+
+Windows/MSVC/Qt 6.11.2 全模块 Release、公开头编译与 CTest 9/9 通过，无 C++ 编译警告。新增/调整检查覆盖主线程实际发送、回复排队前不发送、借用缓冲复用、无二次 TX 封装、停止/重连后丢弃并释放连接及析构移除队列项；串口受控测试确认收包可继续而应答等待主线程处理。证据 build-virtual-all/{build,test}-queued-reply.log。本轮未重跑 Linux、ARM 或实物验证，未推送。
+
 ## 2026-11-03 基类声明清理（用户定）
 
 删除 Handle 本层重复的 Q_DISABLE_COPY 和显式默认构造，默认构造由编译器生成，不可复制/移动沿用 QThread/QObject 基类约束；移除未使用的 concepts、utility 头文件。智能指针参数、收发裁决、重连和同步关闭逻辑未改。

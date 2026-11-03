@@ -100,6 +100,7 @@ private:
     }
     bool connSend(std::shared_ptr<Connection> conn, const QByteArray &bytes) const override
     {
+        require(QThread::currentThread() == thread(), "connSend not on owner thread");
         if (!conn)
         {
             Q_EMIT logMessage(QStringLiteral("probe disconnected"));
@@ -113,6 +114,8 @@ private:
     {
         if (raw == "reply")
             return {QByteArray("response"), RXRuling::Reject, {}};
+        if (raw == "borrowed")
+            return {QByteArray::fromRawData(raw.constData(), raw.size()), RXRuling::Reject, {}};
         if (raw == "drop")
             return {};
         return {raw, RXRuling::Decode, at};
@@ -132,7 +135,7 @@ static_assert(HandleLike<CoreHandle>);
 void dispatchAndSignals()
 {
     auto state = std::make_shared<State>();
-    state->input = {"data", "reply", "drop"};
+    state->input = {"data", "reply", "borrowed", "drop"};
     const auto *ownerThread = QThread::currentThread();
     QObject receiver;
     int connected = 0, disconnected = 0, logs = 0;
@@ -154,6 +157,9 @@ void dispatchAndSignals()
     require(!handle.send("offline"), "disconnected send accepted");
     require(handle.start(Params{state}), "start rejected");
     acquire(state->processed);
+    require(state->sent.empty(), "reply sent before owner event delivery");
+    state->input[2].fill('x'); // 模拟底层复用已经上交的借用缓冲。
+    QCoreApplication::sendPostedEvents(&handle, QEvent::MetaCall);
     require(handle.isOpen() && !handle.start(Params{state}), "duplicate start accepted");
     require(handle.send("command") && !handle.send("drop"), "TX ruling changed");
     state->sendSucceeds = false; // 收包已停在 leaveLoop，只由当前线程发送。
@@ -164,7 +170,7 @@ void dispatchAndSignals()
     require(connected == 1 && disconnected == 1 && logs >= 2, "Qt Core signal delivery failed");
     require(state->callbacks == 1 && state->closes == 1 && !handle.isRunning() && !handle.isOpen(),
             "dispatch or resource release failed");
-    const std::vector<QByteArray> expected{"response", "tx:command", "tx:failure"};
+    const std::vector<QByteArray> expected{"response", "borrowed", "tx:command", "tx:failure"};
     require(state->sent == expected, "RX/TX actions produced wrong output");
 }
 

@@ -5,7 +5,6 @@
 #include <memory>
 #include <utility>
 #include <QByteArray>
-#include <QMetaObject>
 #include <pcap.h>
 #include "HandleBase.h"
 #include "PcapInterfaces.h"
@@ -93,15 +92,6 @@ private:
         {
             Q_EMIT logMessage(QStringLiteral("设备未连接，无法发送数据"));
             return false;
-        }
-        if (QThread::currentThread() != thread())
-        {
-            // 深拷贝跨过 pcap 缓冲寿命；只弱借原连接，停止/重连后不得复用新连接。
-            const std::weak_ptr<PcapConn> original = conn;
-            return QMetaObject::invokeMethod(const_cast<PcapHandle *>(this),
-                [this, original, bytes = QByteArray(data.constData(), data.size())] {
-                    if (const auto live = original.lock()) (void)connSend(live, bytes);
-                }, Qt::QueuedConnection);
         }
         if (pcap_sendpacket(conn->p, reinterpret_cast<const u_char *>(data.constData()),
                             static_cast<int>(data.size())) != 0)

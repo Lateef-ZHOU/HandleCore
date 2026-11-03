@@ -63,7 +63,7 @@ public:
 
     void breakLoop() noexcept { break_.store(true, std::memory_order_relaxed); }
 
-    // 主动发送与收包线程 Reject 回包共用写口；同一串口允许一读一写，不允许两写并发。
+    // 主动发送与 HandleBase 排队的 Reject 回包共用所属线程写口；保留连接级写互斥。
     [[nodiscard]] int write(const QByteArray &data)
     {
         const std::lock_guard lock(writeGate_);

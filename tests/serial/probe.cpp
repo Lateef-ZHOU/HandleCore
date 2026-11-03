@@ -109,14 +109,14 @@ int main(int argc, char **argv)
     require(!handle.send("long"), "write failure accepted");
     writeResult(-1000);
 
-    // 阻塞收包线程的应答写，再让所属线程发命令；同时仍能进入读取。
-    blockWrites(true);
+    // 应答只排队；先等 worker 处理完后续帧，期间所属线程不泵事件。
     const int before = writesStarted();
-    enqueue("reject\n");
+    enqueue("reject\nqueued-marker\n");
+    const auto replyDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (receivedCount() != 4 && std::chrono::steady_clock::now() < replyDeadline) QThread::msleep(1);
+    require(receivedCount() == 4 && writesStarted() == before, "Reject wrote on receive thread");
     require(until([&] { return writesStarted() == before + 1; }), "Reject did not write");
-    std::thread release([] { QThread::msleep(50); FakeSerialPort::blockWrites(false); });
-    require(handle.send("parallel"), "concurrent command failed");
-    release.join();
+    require(handle.send("following"), "following command failed");
     require(maxConcurrentWrites() == 1, "two writes overlapped");
 
     enqueue("old-tail");
@@ -125,10 +125,10 @@ int main(int argc, char **argv)
     failRead();
     require(until([&] { return opens() == 2 && handle.isOpen(); }), "I/O failure did not reconnect");
     enqueue("fresh\n");
-    require(until([&] { return receivedCount() == 4; }), "new connection did not receive");
+    require(until([&] { return receivedCount() == 5; }), "new connection did not receive");
     handle.stop(); handle.stop();
     QCoreApplication::processEvents();
-    require(received == std::vector<QByteArray>{"one", "two", "partial", "fresh"}, "framer state leaked across connections");
+    require(received == std::vector<QByteArray>{"one", "two", "partial", "queued-marker", "fresh"}, "framer state leaked across connections");
     require(connections == 22 && livePorts() == 0 && closes() == 2, "each connection must announce acquisition and release");
     require(onWorker && typedTime, "callback thread/time changed");
     require(logs.contains("串口发送超时，仅写入 2/4 字节") && logs.contains("串口发送失败，错误码 -2"), "write diagnostics missing");

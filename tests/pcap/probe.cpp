@@ -95,8 +95,9 @@ void staleReplies()
             until([&] { return FakePcap::opens() == 2 && h.isOpen(); }, false);
         }
         else { h.stop(); open(h, p); }
-        require(old->closed, "queued reply kept old connection alive");
+        require(!old->closed, "queued reply lost its captured connection");
         QCoreApplication::processEvents();
+        require(old->closed, "discarded queued reply leaked its connection");
         require(FakePcap::sent().empty(), "old reply reached a closed or replacement connection");
         require(h.send("fresh") && kindOf(FakePcap::sent().back().bytes) == FrameKind::ARPRequest,
                 "replacement connection reused ARP state");
