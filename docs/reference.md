@@ -33,7 +33,7 @@ Makefiles 等单配置生成器在配置时加 `-DCMAKE_BUILD_TYPE=Release`。Wi
 - 所属线程调用 `start(params)`、`send(payload)`、`stop()`，其他线程可观察 `isOpen()`。继承的 QThread 启停方法不替代 Handle 生命周期入口。
 - 默认构造由编译器生成，不可复制/移动沿用 QThread/QObject 基类约束，本层不重复声明复制禁令或默认构造函数。接收方派生并重写纯虚 `onData(const QByteArray &, RxTime)`，在收包线程同步执行。字节可能借用外部缓冲；异步留存者负责数据所有权，RxTime 可按值复制。
 - Handle 不再持有外部上传回调；内部连接循环回调 由私有静态 makeDispatch 在每轮 connLoop 前现场生成，不存固定派发闭包成员。虚拟云台将回调移入 Qt 定时器槽，虚拟采集将结果交付函数移入连接；串口/Pcap 在同步收包栈上借用回调。接收方仍须遵守 stop 返回前退出在途回调的契约。
-- 一次 `onRX` 产生一项裁决：Decode 在收包线程同步上交，Reject 由 HandleBase 捕获 conn 和 r 后排队到所属线程直接调用 connSend，Drop 无动作。Reject 排队前 detach 裁决字节，避免借用缓冲失效；执行时核对原连接仍是当前连接，否则丢弃，不重新经过 onTX。队列项强持原连接到执行或销毁，stop 仍等待收包退出，但不排空回复队列或保证其持有资源已经释放。`onTX` 的 Encode 交给 `connSend`，Drop 返回失败。
+- 一次 `onRX` 产生一项裁决：Decode 在收包线程同步上交，Reject 由 HandleBase 捕获 conn 和 r 后排队到所属线程直接调用 connSend，Drop 无动作。Reject 排队前 detach 裁决字节，避免借用缓冲失效；执行时直接使用捕获的原连接，不复查当前连接，不重新经过 onTX。停止或重连不撤销已排队回复，实际发送结果由 connSend 处理。队列项强持原连接到执行或销毁，stop 仍等待收包退出，但不排空回复队列或保证其持有资源已经释放。`onTX` 的 Encode 交给 `connSend`，Drop 返回失败。
 - `RXRuling` / `TXRuling` 公开继承 `QByteArray`，自身就是字节产物，不另存 `payload`。动作以匿名枚举成员 `act` 声明，默认仍为 Drop；RX 另带 `at`。聚合初始化顺序为 `{bytes, RXRuling::Decode, at}` / `{bytes, TXRuling::Encode}`，默认 `{}` 仍丢弃；同步发送和上传直接借用其 QByteArray 基类；Reject 排队另按上述字节所有权约束处理。
 - 首次打开失败即退出；建立过连接后 I/O 失败仍按一秒间隔重连。每次打开前发 AboutToAcquire，发布可发送连接后发 Acquired，撤销观察口并释放工作线程份额后发 Released。打开失败不会伪造 Acquired/Released；自动重连的阶段也通知，但不发 AboutToRelease。上层通过实际状态判断是否重新配置。
 - `stop()` 在所属线程先同步发 connectionChanged(ResourcePhase::AboutToRelease)，接收方可在促断前尝试收尾发送；随后记录停止请求、促断并等待收包与同步回调退出。重复 stop 不重复通知；首次打开失败已退出后调用 stop 不通知。打开中/重连间隙关闭仍通知，但发送可能失败，失败不阻止关闭。
@@ -105,13 +105,13 @@ ctest --test-dir build-pcap -C Release --output-on-failure
 
 Linux 使用 `-DCMAKE_BUILD_TYPE=Release`，通过 pkg-config 强制 `libpcap>=1.10.0`；不需要 Npcap 前缀。Windows 需要 Npcap SDK 及已安装的驱动/运行库，CMake 按目标架构选择导入库，从 `HANDLECORE_PCAP_RUNTIME` 指向的实际 wpcap.dll 读取 **libpcap** 版本，不能把 Npcap 产品版本当作 libpcap 版本。自动查找会使用前缀内 Bin 或系统 Npcap 目录，必要时显式指定运行库路径；部署须使用满足相同要求的运行库。Windows 交叉编译无法执行目标 DLL 时，需依据目标运行库资料显式传 `HANDLECORE_PCAP_VERSION`，仍要求 >= 1.10.0。ARM 交叉编译尚未验证。
 
-所属线程运行事件循环并调用 start/send/stop。worker 只收包、解析和更新连接内 ARP 原子快照；所有 pcap_sendpacket 在所属线程执行。主动 send 同步返回实际发送结果；收包裁决产生的 ARP 应答及学习后补发通过绑定 Handle 上下文的排队调用发送，队列接受不代表已发到设备。统一使用 HandleBase 的排队回复，不再由 Pcap 二次转发。队列取得报文字节所有权并强持原连接；执行时只比较当前连接身份，停止或重连后丢弃旧回复，Handle 销毁则移除队列项。原连接的最终资源释放可能延后到队列项释放。
+所属线程运行事件循环并调用 start/send/stop。worker 只收包、解析和更新连接内 ARP 原子快照；所有 pcap_sendpacket 在所属线程执行。主动 send 同步返回实际发送结果；收包裁决产生的 ARP 应答及学习后补发通过绑定 Handle 上下文的排队调用发送，队列接受不代表已发到设备。统一使用 HandleBase 的排队回复，不再由 Pcap 二次转发。队列取得报文字节所有权并强持原连接；执行时直接通过捕获的原连接发送，停止或重连不撤销该回复；不会改发到替换连接，Handle 销毁则移除队列项。原连接的最终资源释放可能延后到队列项释放。
 
 单个 pcap_t 的并发接收/发送是当前用户接受的使用约定，**不宣称 libpcap 对它提供跨平台并发保证**，没有新增第二个句柄、写线程或重试层。MAC 未知时只保留最新一条待发 UDP，每次主动发送触发一次 ARP 探测；新连接重新建立学习状态。首次打开失败即退出，后续接收/重开失败每秒重连，stop 的促断及同步等待保持。打开、配置、激活、过滤器及发送失败均记录具体原因，不引入永久错误分类。
 
 当前只支持普通 Ethernet、固定 20 字节 IPv4 头、非分片 UDP 和既有 ARP 格式。VLAN、其他链路头、IP 选项及分片重组暂不扩展；实际网卡应返回 Ethernet 格式，不使用 Linux `any` 等 cooked capture 接口。Windows 枚举结合 pcap 名单和系统适配器名称/MAC，Linux 从 AF_PACKET 取得以太网 MAC。协议扩展时须同时更新识别、BPF 与载荷偏移。UDP 载荷读口拒绝不足头长的帧；只读迭代器避免 GCC 优化后对 Qt 空数组哨兵的越界告警，不做协议形式扩展。
 
-验证：Windows x64 / MSVC / Qt 6.11.2 / Npcap 1.86（libpcap 1.10.6）与 Linux x86_64 / GCC 16.2.1 / Qt 6.12.0 / libpcap 1.11.0 均严格警告构建零诊断，完整 CTest **9/9** 通过。`pcap_probe` 使用 C API 链接替身驱动生产 Handle，验证主线程发送、ARP 学习与最新报文补发、旧回包跨停止/重连/析构的丢弃、RxTime、截断包、发送失败、半开资源释放及等待在途回调；`pcap_link_probe` 真正链接系统库，枚举网卡并离线编译/执行 BPF，不打开或发送到实物网卡。三个新增公共头分别独立编译。
+迁入时验证（旧回包策略已由上述当前契约替代）：Windows x64 / MSVC / Qt 6.11.2 / Npcap 1.86（libpcap 1.10.6）与 Linux x86_64 / GCC 16.2.1 / Qt 6.12.0 / libpcap 1.11.0 均严格警告构建零诊断，完整 CTest **9/9** 通过。`pcap_probe` 使用 C API 链接替身驱动生产 Handle，验证主线程发送、ARP 学习与最新报文补发、旧回包跨停止/重连/析构的丢弃、RxTime、截断包、发送失败、半开资源释放及等待在途回调；`pcap_link_probe` 真正链接系统库，枚举网卡并离线编译/执行 BPF，不打开或发送到实物网卡。三个新增公共头分别独立编译。
 
 Linux 另以 libpcap 1.9.1 的 pkg-config 元数据确认配置拒绝，关闭模块后 Core 独立构建和 5/5 测试通过；Pcap 探针运行时只依赖 Qt Core，不引入 QML/Gui。以上不是 ARM、实物断连重连或单句柄驱动并发实测。
 

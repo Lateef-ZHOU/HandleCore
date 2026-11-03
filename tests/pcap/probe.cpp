@@ -79,7 +79,7 @@ void queuedArpAndUdp()
     for (const auto &sent : FakePcap::sent()) require(sent.thread == owner, "send ran outside owner thread");
     h.stop(); h.stop(); require(s->closed && !h.send("offline"), "stop did not release connection");
 }
-void staleReplies()
+void capturedReplies()
 {
     for (bool reconnect : {false, true})
     {
@@ -97,8 +97,12 @@ void staleReplies()
         else { h.stop(); open(h, p); }
         require(!old->closed, "queued reply lost its captured connection");
         QCoreApplication::processEvents();
-        require(old->closed, "discarded queued reply leaked its connection");
-        require(FakePcap::sent().empty(), "old reply reached a closed or replacement connection");
+        require(old->closed, "completed queued reply leaked its connection");
+        const auto replies = FakePcap::sent();
+        require(replies.size() == 1 && replies.front().id == old->id
+                && replies.front().thread == QThread::currentThread()
+                && replies.front().bytes == ARPReply(ARPRequest(peer(), p.deviceIPv4, p.hostIPv4), p.host.macAddress),
+                "queued reply did not use its captured connection and bytes on the owner thread");
         require(h.send("fresh") && kindOf(FakePcap::sent().back().bytes) == FrameKind::ARPRequest,
                 "replacement connection reused ARP state");
         h.stop();
@@ -137,6 +141,6 @@ void openFailuresAndStop()
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
-    queuedArpAndUdp(); staleReplies(); openFailuresAndStop();
-    std::puts("Pcap production I/O, owner-thread sends, stale replies, ARP/UDP and lifecycle passed");
+    queuedArpAndUdp(); capturedReplies(); openFailuresAndStop();
+    std::puts("Pcap production I/O, owner-thread sends, captured replies, ARP/UDP and lifecycle passed");
 }

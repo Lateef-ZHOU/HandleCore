@@ -1,5 +1,11 @@
 # CI 与本地复现
 
+## 2026-11-03 排队回复直接使用捕获连接（用户定）
+
+删除 Reject 队列中的当前连接身份判断，保留 r.detach()、conn/r 按值捕获和所属线程 connSend。停止或重连不撤销已排队回复，仍向被保活的原连接尝试发送；Handle 销毁移除队列项。不改重连、关闭或裁决流程。此裁定替代下方上一轮的旧回复丢弃策略。
+
+Windows/MSVC/Qt 6.11.2 全模块 Release、公开头编译及 CTest 9/9（11.33 秒）通过，无 C++ 编译警告。Pcap 受控验证检查停止重开及自动重连后，回复在所属线程使用原连接及原字节、随后释放连接；析构取消排队调用的验证保留。既有借用缓冲复用测试继续通过。证据 build-virtual-all/{build,test}-captured-reply.log；本轮未重跑 Linux、ARM 或硬件，未推送。
+
 ## 2026-11-03 Reject 统一投递所属线程（用户定）
 
 HandleBase 捕获 conn/r，通过绑定自身上下文的 QueuedConnection 直接调用 connSend；排队前 detach 字节，执行前核对原连接身份，禁止停止/重连后的旧回复发送。删除 Pcap 二次投递。队列强持连接至执行或销毁，stop 不排空队列；重连、促断、wait 和裁决种类保持。

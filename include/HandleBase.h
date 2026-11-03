@@ -210,9 +210,7 @@ Handle<ParamT, ConnT>::makeDispatch(Handle<ParamT, ConnT> *self)
             // 裁决可能借用接收缓冲；排队前取得字节所有权，连接随队列项保活。
             r.detach();
             QMetaObject::invokeMethod(self, [self, conn, r] {
-                // 停止/重连已撤销原连接时丢弃旧回复，不把它发给新连接。
-                if (self->conn_.load().lock() == conn)
-                    (void)self->connSend(conn, r);
+                (void)self->connSend(conn, r);
             }, Qt::QueuedConnection);
             break;
         case RXRuling::Drop:
