@@ -1,6 +1,7 @@
 #pragma once
 #include <QByteArray>
 #include <vector>
+#include <chrono>
 #include <libserialport.h>
 
 // 测试链接替身：生产 SerialHandle/SerialConn 原样调用真实头文件声明的 C API。
@@ -22,4 +23,5 @@ int baudRate();
 sp_flowcontrol flowControl();
 unsigned writeTimeout();
 std::vector<QByteArray> writes();
+std::vector<std::chrono::steady_clock::time_point> writeTimes();
 }

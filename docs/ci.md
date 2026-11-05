@@ -1,5 +1,13 @@
 # CI 与本地复现
 
+## 2026-11-05：协议排队发送裁决（用户定）
+
+TXRuling 新增 Queued：协议已接管排队，send 返回接受，不再调用 connSend；实际写入失败由协议使用现有 connSend 日志报告。SerialHandle 的 final connSend 开放给派生协议定时发送，未增加转发方法。测试替身记录写入时刻供温控节流验证，生产收包、重连和关闭逻辑保持。
+
+Windows/MSVC/Qt 6.11.2 全模块 Release、公开头构建和 CTest 6/6 通过；Queued 返回成功且不立即走通用 connSend 的负向检查通过。温控集成验证覆盖首条立即、100 ms 间隔和尾条冷却、关闭/重连清队列、短写/错误日志及析构。Linux Qt 6.8.3 的温控专项 1/1、Bridge 4/4 和 ARM64 板上替身测试通过，详细部署和实物只读查询记录在 BridgeCore/VALIDATION.md。未推送。
+
+证据：build-virtual-all/queued-build.log、Testing/Temporary/LastTest.log；相邻 TCM232Device/build/build-paced-final.log。
+
 ## 2026-11-03：清理串口测试写阻塞残留（用户定）
 
 仅删除测试替身的 `blockWrites`、`writesBlocked` 和模拟发送内的条件等待；发送侧锁改用 `lock_guard`。接收仍用条件变量等待，保留 `writes()` 及短写/失败注入。生产代码、发送线程、重连和关闭逻辑均未改，不更新应用固定依赖或运行包。

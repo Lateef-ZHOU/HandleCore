@@ -125,6 +125,8 @@ private:
     {
         if (raw == "drop")
             return {};
+        if (raw == "queued")
+            return {{}, TXRuling::Queued};
         return {QByteArray("tx:") + raw, TXRuling::Encode};
     }
     const std::shared_ptr<State> state_;
@@ -163,6 +165,7 @@ void dispatchAndSignals()
     QCoreApplication::sendPostedEvents(&handle, QEvent::MetaCall);
     require(handle.isOpen() && !handle.open(Params{state}), "duplicate start accepted");
     require(handle.send("command") && !handle.send("drop"), "TX ruling changed");
+    require(handle.send("queued"), "queued ruling must report acceptance without immediate connSend");
     state->sendSucceeds = false; // 收包已停在 leaveLoop，只由当前线程发送。
     require(!handle.send("failure"), "send failure swallowed");
     handle.close();

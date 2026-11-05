@@ -13,6 +13,7 @@ struct State
 {
     std::deque<QByteArray> incoming;
     std::vector<QByteArray> written;
+    std::vector<std::chrono::steady_clock::time_point> writeTimes;
     bool readFailure = false, openFailure = false, configFailure = false;
     int openCount = 0, closeCount = 0, alive = 0, readCount = 0;
     int writeCount = 0, activeWrites = 0, maxWrites = 0, writeResult = -1000, baud = 0;
@@ -41,6 +42,7 @@ int baudRate() { const std::lock_guard lock(gate); return state.baud; }
 sp_flowcontrol flowControl() { const std::lock_guard lock(gate); return state.flow; }
 unsigned writeTimeout() { const std::lock_guard lock(gate); return state.timeout; }
 std::vector<QByteArray> writes() { const std::lock_guard lock(gate); return state.written; }
+std::vector<std::chrono::steady_clock::time_point> writeTimes() { const std::lock_guard lock(gate); return state.writeTimes; }
 }
 
 extern "C"
@@ -102,6 +104,7 @@ sp_return sp_blocking_write(sp_port *, const void *buf, size_t count, unsigned t
 {
     const std::lock_guard lock(gate);
     ++state.writeCount;
+    state.writeTimes.push_back(std::chrono::steady_clock::now());
     ++state.activeWrites;
     state.maxWrites = std::max(state.maxWrites, state.activeWrites);
     state.timeout = timeout;

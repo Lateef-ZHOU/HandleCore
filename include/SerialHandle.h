@@ -114,6 +114,8 @@ private:
             conn->breakLoop();
     }
 
+protected:
+    // 协议定时发送使用已封装字节，不再次进入 onTX。
     [[nodiscard]] bool connSend(std::shared_ptr<SerialConn<Framer>> conn, const QByteArray &data) const final
     {
         if (!conn)

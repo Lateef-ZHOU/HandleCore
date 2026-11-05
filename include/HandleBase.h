@@ -46,12 +46,13 @@ struct RXRuling : QByteArray
     RxTime at{};
 };
 
-// Encode 将产物交给 connSend，Drop 拒发；发送结果沿用 connSend。
+// Encode 立即交 connSend；Queued 已由协议接管发送，返回接受；Drop 拒收。
 struct TXRuling : QByteArray
 {
     enum
     {
         Encode,
+        Queued,
         Drop
     } act = Drop;
 };
@@ -115,6 +116,8 @@ public:
             return false;
         case TXRuling::Encode:
             return connSend(conn, r);
+        case TXRuling::Queued:
+            return true;
         }
         return false;
     }
