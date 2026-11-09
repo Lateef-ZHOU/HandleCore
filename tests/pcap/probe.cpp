@@ -60,15 +60,16 @@ void queuedArpAndUdp()
     FakePcap::inject(s, ARPReply(request, peer()));
     until([&] { return s->delivered == 1; }, false);
     require(FakePcap::sent().size() == 2, "worker sent pending UDP instead of queuing");
-    until([&] { return FakePcap::sent().size() == 3; });
-    require(UDPDatagram(FakePcap::sent().back().bytes).bodyView() == "latest", "ARP flush lost latest payload");
+    until([&] { return FakePcap::sent().size() == 4; });
+    require(UDPDatagram(FakePcap::sent()[2].bytes).bodyView() == "first"
+            && UDPDatagram(FakePcap::sent()[3].bytes).bodyView() == "latest", "ARP flush lost or reordered payloads");
     require(h.send("known"), "known peer UDP rejected");
     require(kindOf(FakePcap::sent().back().bytes) == FrameKind::UDPDatagram, "learned MAC was not used");
     const ARPRequest incoming(peer(), p.deviceIPv4, p.hostIPv4);
     FakePcap::inject(s, incoming);
     until([&] { return s->delivered == 2; }, false);
-    require(FakePcap::sent().size() == 4, "worker directly sent ARP reply");
-    until([&] { return FakePcap::sent().size() == 5; });
+    require(FakePcap::sent().size() == 5, "worker directly sent ARP reply");
+    until([&] { return FakePcap::sent().size() == 6; });
     require(FakePcap::sent().back().bytes == ARPReply(incoming, p.host.macAddress), "queued ARP bytes corrupted");
     const UDPDatagram udp(p.host.macAddress, peer(), p.deviceIPv4, p.hostIPv4, p.devicePort, p.hostPort, "inbound");
     FakePcap::inject(s, udp); FakePcap::inject(s, udp, true); FakePcap::inject(s, "tiny");
@@ -153,18 +154,35 @@ void ownerArpLearning()
             && kindOf(FakePcap::sent().back().bytes) == FrameKind::ARPRequest,
             "worker learned MAC before owner processed the event");
     source.fill('x');
-    until([&] { return FakePcap::sent().size() == 3; });
-    require(UDPDatagram(FakePcap::sent().back().bytes).bodyView() == "latest",
-            "learning did not take the latest owning pending payload");
+    until([&] { return FakePcap::sent().size() == 4; });
+    require(UDPDatagram(FakePcap::sent()[2].bytes).bodyView() == "first"
+            && UDPDatagram(FakePcap::sent()[3].bytes).bodyView() == "latest",
+            "learning did not flush owning pending payloads in order");
     FakePcap::inject(s, reply);
     until([&] { return s->delivered == 2; }, false);
     QCoreApplication::processEvents();
-    require(FakePcap::sent().size() == 3, "duplicate ARP reply resent consumed pending payload");
-    require(h.send("known") && FakePcap::sent().size() == 4
+    require(FakePcap::sent().size() == 4, "duplicate ARP reply resent consumed pending payload");
+    require(h.send("known") && FakePcap::sent().size() == 5
             && UDPDatagram(FakePcap::sent().back().bytes).bodyView() == "known",
             "learned MAC was not used for direct send");
     for (const auto &sent : FakePcap::sent())
         require(sent.thread == QThread::currentThread(), "ARP send escaped owner thread");
+    h.close();
+}
+void pendingOverflow()
+{
+    FakePcap::reset();
+    CallbackHandle<PcapHandle> h([](const QByteArray &, RxTime) {});
+    const auto p = params(); open(h, p);
+    const auto s = FakePcap::last();
+    const int total = static_cast<int>(PcapConn::kPendingCapacity) + 1;
+    for (int i = 0; i < total; ++i)
+        require(h.send(QByteArray::number(i)), "pending overflow send rejected");
+    FakePcap::inject(s, ARPReply(ARPRequest(p.host.macAddress, p.hostIPv4, p.deviceIPv4), peer()));
+    until([&] { return FakePcap::sent().size() == static_cast<std::size_t>(total) + PcapConn::kPendingCapacity; });
+    for (std::size_t i = 0; i < PcapConn::kPendingCapacity; ++i)
+        require(UDPDatagram(FakePcap::sent()[total + i].bytes).bodyView() == QByteArray::number(static_cast<int>(i) + 1),
+                "full pending ring did not drop only the oldest payload");
     h.close();
 }
 void openFailuresAndStop()
@@ -192,6 +210,6 @@ void openFailuresAndStop()
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
-    queuedArpAndUdp(); ownerArpLearning(); capturedReplies(); openFailuresAndStop();
+    queuedArpAndUdp(); ownerArpLearning(); pendingOverflow(); capturedReplies(); openFailuresAndStop();
     std::puts("Pcap production I/O, owner-thread sends, captured replies, ARP/UDP and lifecycle passed");
 }

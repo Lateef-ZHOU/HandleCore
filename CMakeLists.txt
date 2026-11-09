@@ -37,7 +37,7 @@ if(HANDLECORE_WITH_PCAP)
         "${CMAKE_CURRENT_SOURCE_DIR}/include/PcapHandle.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/PcapProtocol.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/PcapInterfaces.h")
-    target_link_libraries(HandlePcap PUBLIC Lidar::HandleCore HandlePcapDependency)
+    target_link_libraries(HandlePcap PUBLIC Lidar::HandleCore HandlePcapDependency Boost::circular_buffer)
     if(WIN32)
         target_link_libraries(HandlePcap PUBLIC iphlpapi)
         target_compile_definitions(HandlePcap PUBLIC NOMINMAX)

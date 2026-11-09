@@ -1,4 +1,18 @@
-# Only used by the optional Pcap target. Core and Serial do not discover libpcap.
+# Only used by the optional Pcap target. Core and Serial do not discover libpcap or Boost.
+# Pending UDP payloads use Boost.CircularBuffer; reuse a consumer target or installed package first.
+if(NOT TARGET Boost::circular_buffer)
+    find_package(Boost 1.88 QUIET CONFIG COMPONENTS circular_buffer)
+    if(NOT TARGET Boost::circular_buffer)
+        include(FetchContent)
+        set(BOOST_INCLUDE_LIBRARIES ${BOOST_INCLUDE_LIBRARIES} circular_buffer)
+        FetchContent_Declare(boost
+            URL https://github.com/boostorg/boost/releases/download/boost-1.88.0/boost-1.88.0-cmake.tar.xz
+            URL_HASH SHA256=f48b48390380cfb94a629872346e3a81370dc498896f16019ade727ab72eb1ec
+            EXCLUDE_FROM_ALL)
+        FetchContent_MakeAvailable(boost)
+    endif()
+endif()
+
 if(WIN32)
     find_path(HANDLECORE_PCAP_INCLUDE_DIR pcap.h PATH_SUFFIXES Include REQUIRED)
     if(CMAKE_GENERATOR_PLATFORM MATCHES "[Aa][Rr][Mm]64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|aarch64")

@@ -1,5 +1,11 @@
 # CI 与本地复现
 
+## 2026-11-09：MAC 未知时暂存多条报文（用户定）
+
+PcapConn 的 pending 由单个 QByteArray 改为容量 32 的 `boost::circular_buffer<QByteArray>`：MAC 未知时按到达顺序暂存，满后覆盖最旧一条；ARP 回应在所属线程学习 MAC 后从旧到新逐条补发并清空。send 仍返回成功，不把未应答 ARP 当作设备断开；每次主动发送仍发一次 ARP 探测。Pcap 模块新增 Boost.CircularBuffer 依赖，按 RayshiningDevice 的方式复用已有目标或已装包，否则下载固定 SHA256 的 Boost 1.88.0。
+
+Windows/MSVC/Qt 6.11.2 全模块（build-virtual-all）Release 构建零诊断，CTest 6/6 通过（4.56 秒）。pcap_probe 改为验证两条暂存按序补发、主线程未处理学习前追加的报文一并补发、重复回应不重复发，新增 33 条溢出只丢最旧一条。Boost 使用主程序 build/_deps 中同版本源码。日志：build-virtual-all/pending-ring-configure.log、pending-ring-build.log。未测 Linux/ARM 或实物网卡，未推送。
+
 ## 2026-11-05：协议排队发送裁决（用户定）
 
 TXRuling 新增 Queued：协议已接管排队，send 返回接受，不再调用 connSend；实际写入失败由协议使用现有 connSend 日志报告。SerialHandle 的 final connSend 开放给派生协议定时发送，未增加转发方法。测试替身记录写入时刻供温控节流验证，生产收包、重连和关闭逻辑保持。

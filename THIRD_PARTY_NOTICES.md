@@ -6,7 +6,7 @@
 
 本仓库自有源码、构建脚本、测试和文档采用 [MIT](LICENSE)，版权署名为周涛（ZHOU TAO）。外部依赖仍属于各自权利人，不因链接 HandleCore 或与其一同打包而改为 MIT。第三方原有声明不得以本仓库署名替换。
 
-当前 Git 仓库不随附 Qt、libserialport、libpcap/Npcap 的源码、SDK、运行库或驱动；CMake 引用使用环境提供的依赖。仅发布本仓库源码，与分发含依赖的可执行程序、安装包、容器镜像或设备固件，是不同的分发场景。本文是依赖说明，不是后者所需完整许可证和版权声明的替代品。
+当前 Git 仓库不随附 Qt、libserialport、libpcap/Npcap、Boost 的源码、SDK、运行库或驱动；CMake 引用使用环境提供的依赖。仅发布本仓库源码，与分发含依赖的可执行程序、安装包、容器镜像或设备固件，是不同的分发场景。本文是依赖说明，不是后者所需完整许可证和版权声明的替代品。
 
 ## 模块与许可证
 
@@ -15,6 +15,7 @@
 | Qt Core | Core 及全部可选模块 | 提供 LGPLv3 和商业许可等选择；本文说明 LGPLv3 路线。[Qt Core 许可与归属](https://doc.qt.io/qt-6.8/qtcore-index.html#licenses-and-attributions)、[LGPLv3 全文](https://doc.qt.io/qt-6/lgpl.html) |
 | libserialport | 仅启用 `HANDLECORE_WITH_SERIAL` 时 | LGPL-3.0-or-later。[官方仓库](https://github.com/sigrokproject/libserialport)、[COPYING](https://github.com/sigrokproject/libserialport/blob/master/COPYING) |
 | libpcap | Linux 上的 Pcap 模块 | BSD 三条款；保留所用版本的版权、条件与免责声明。[官方 LICENSE](https://github.com/the-tcpdump-group/libpcap/blob/master/LICENSE) |
+| Boost.CircularBuffer | Pcap 模块（MAC 未知时的待发报文环） | Boost Software License 1.0，仅头文件；CMake 默认引用 Boost 1.88.0 并核验归档 SHA256，保留上游 LICENSE_1_0.txt 与版权声明。[许可全文](https://www.boost.org/LICENSE_1_0.txt) |
 | Npcap SDK / 运行库 / 驱动 | Windows 上的 Pcap 模块 | Npcap 运行库/驱动采用独立许可，不是普通开源许可；SDK 及其文件按各自所附条款处理。[官方许可](https://npcap.com/license)、[SDK 开发说明](https://npcap.com/guide/npcap-devguide.html) |
 
 所有可选模块默认关闭；仅启用串口不会引入 Npcap。仿真代码及其 MIT 许可随源码迁入对应官邸仓库。Qt 和抓包发行包内还可能含其他第三方组件，须按实际包的归属清单保留对应声明，不能仅附本表。

@@ -16,7 +16,7 @@ Core 与 Pcap 为静态目标：Core 从 HandleBase.h 唯一生成 ResourcePhase
 |---|---|---|
 | `Lidar::HandleCore` | 始终提供 | 基类、收发裁决、连接和关闭 |
 | `Lidar::Serial` | `HANDLECORE_WITH_SERIAL=ON` | libserialport >= 0.1.1；成帧与协议由应用接入 |
-| `Lidar::Pcap` | `HANDLECORE_WITH_PCAP=ON` | Linux libpcap >= 1.10.0；Windows Npcap SDK 及含 libpcap >= 1.10.0 的运行库 |
+| `Lidar::Pcap` | `HANDLECORE_WITH_PCAP=ON` | Linux libpcap >= 1.10.0；Windows Npcap SDK 及含 libpcap >= 1.10.0 的运行库；Boost.CircularBuffer >= 1.88（优先复用上层目标或已安装包，否则下载固定哈希的官方 1.88.0 归档） |
 
 只有开启对应模块才查找其依赖。Serial 先使用 `libserialport::libserialport` Config 包，找不到时使用 pkg-config；两种入口均检查实际头文件版本，因此兼容没有 ConfigVersion 文件的包。Pcap 在 Linux 通过 pkg-config 检查版本，在 Windows 检查所选 wpcap.dll 内的 libpcap 版本，不能用 Npcap 产品版本替代。
 

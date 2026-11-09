@@ -107,9 +107,9 @@ ctest --test-dir build-pcap -C Release --output-on-failure
 
 Linux 使用 `-DCMAKE_BUILD_TYPE=Release`，通过 pkg-config 强制 `libpcap>=1.10.0`；不需要 Npcap 前缀。Windows 需要 Npcap SDK 及已安装的驱动/运行库，CMake 按目标架构选择导入库，从 `HANDLECORE_PCAP_RUNTIME` 指向的实际 wpcap.dll 读取 **libpcap** 版本，不能把 Npcap 产品版本当作 libpcap 版本。自动查找会使用前缀内 Bin 或系统 Npcap 目录，必要时显式指定运行库路径；部署须使用满足相同要求的运行库。Windows 交叉编译无法执行目标 DLL 时，需依据目标运行库资料显式传 `HANDLECORE_PCAP_VERSION`，仍要求 >= 1.10.0。ARM 交叉编译尚未验证。
 
-所属线程运行事件循环并调用 open/send/close。worker 只收包和解析，收到有效 ARP 回应后捕获原连接及 MAC 投递所属线程；所有 pcap_sendpacket 在所属线程执行。主动 send 同步返回实际发送结果；收包裁决产生的 ARP 应答及学习后补发通过绑定 Handle 上下文的排队调用发送，队列接受不代表已发到设备。ARP 请求应答使用 HandleBase 的排队回复；ARP 回应的学习与补发由 Pcap 在一个所属线程队列项内完成，各只投递一次。PcapConn 直接持有 deviceMAC/pending，创建时初始化 MAC 种子，发布后两字段仅由所属线程访问；未知 MAC 时保存最新 pending（直接隐式共享下发数组，不 detach），学习时更新 MAC 并取空 pending，重复回应不重复补发。没有 ArpState、原子共享指针或 CAS。队列取得报文字节所有权并强持原连接；执行时直接通过捕获的原连接发送，停止或重连不撤销该回复；不会改发到替换连接，Handle 销毁则移除队列项。原连接的最终资源释放可能延后到队列项释放。
+所属线程运行事件循环并调用 open/send/close。worker 只收包和解析，收到有效 ARP 回应后捕获原连接及 MAC 投递所属线程；所有 pcap_sendpacket 在所属线程执行。主动 send 同步返回实际发送结果；收包裁决产生的 ARP 应答及学习后补发通过绑定 Handle 上下文的排队调用发送，队列接受不代表已发到设备。ARP 请求应答使用 HandleBase 的排队回复；ARP 回应的学习与补发由 Pcap 在一个所属线程队列项内完成，各只投递一次。PcapConn 直接持有 deviceMAC/pending，创建时初始化 MAC 种子，发布后两字段仅由所属线程访问；未知 MAC 时把下发报文按到达顺序存入容量 32 的 `boost::circular_buffer<QByteArray>`（直接隐式共享下发数组，不 detach），满后覆盖最旧一条；学习时更新 MAC，从旧到新逐条补发并清空，重复回应不重复补发。暂存期间 send 仍返回成功：ARP 尚未应答不等于设备断开。没有 ArpState、原子共享指针或 CAS。队列取得报文字节所有权并强持原连接；执行时直接通过捕获的原连接发送，停止或重连不撤销该回复；不会改发到替换连接，Handle 销毁则移除队列项。原连接的最终资源释放可能延后到队列项释放。
 
-单个 pcap_t 的并发接收/发送是当前用户接受的使用约定，**不宣称 libpcap 对它提供跨平台并发保证**，没有新增第二个句柄、写线程或重试层。MAC 未知时只保留最新一条待发 UDP，每次主动发送触发一次 ARP 探测；新连接重新建立学习状态。首次打开失败即退出，后续接收/重开失败每秒重连，close 的促断及同步等待保持。打开、配置、激活、过滤器及发送失败均记录具体原因，不引入永久错误分类。
+单个 pcap_t 的并发接收/发送是当前用户接受的使用约定，**不宣称 libpcap 对它提供跨平台并发保证**，没有新增第二个句柄、写线程或重试层。MAC 未知时最多暂存 32 条待发 UDP，每次主动发送触发一次 ARP 探测；新连接重新建立学习状态。首次打开失败即退出，后续接收/重开失败每秒重连，close 的促断及同步等待保持。打开、配置、激活、过滤器及发送失败均记录具体原因，不引入永久错误分类。
 
 当前只支持普通 Ethernet、固定 20 字节 IPv4 头、非分片 UDP 和既有 ARP 格式。VLAN、其他链路头、IP 选项及分片重组暂不扩展；实际网卡应返回 Ethernet 格式，不使用 Linux `any` 等 cooked capture 接口。Windows 枚举结合 pcap 名单和系统适配器名称/MAC，Linux 从 AF_PACKET 取得以太网 MAC。协议扩展时须同时更新识别、BPF 与载荷偏移。UDP 载荷读口拒绝不足头长的帧；只读迭代器避免 GCC 优化后对 Qt 空数组哨兵的越界告警，不做协议形式扩展。
 

@@ -1,10 +1,11 @@
 #pragma once
-#include <functional>
 #include <chrono>
+#include <cstddef>
+#include <functional>
 #include <memory>
-#include <utility>
 #include <QByteArray>
 #include <QMetaObject>
+#include <boost/circular_buffer.hpp>
 #include <pcap.h>
 #include "HandleBase.h"
 #include "PcapInterfaces.h"
@@ -27,9 +28,11 @@ struct PcapConn
 {
     pcap_t *const p;
     const PcapParams params;
-    // 发布前初始化；发布后仅所属线程学习 MAC、暂存和取走最新报文。
+    // 发布前初始化；发布后仅所属线程学习 MAC、暂存和取走待发报文。
+    // MAC 未知时按到达顺序暂存，满后覆盖最旧一条；学习后从旧到新补发。
+    static constexpr std::size_t kPendingCapacity = 32;
     MAC deviceMAC;
-    QByteArray pending;
+    boost::circular_buffer<QByteArray> pending{kPendingCapacity};
     static void close(PcapConn *conn)
     {
         pcap_close(conn->p);
@@ -116,11 +119,11 @@ private:
             // 收包只提取 MAC；学习与补发在所属线程一次完成，原连接随队列项保活。
             QMetaObject::invokeMethod(this, [this, conn, mac] {
                 conn->deviceMAC = mac;
-                const auto pending = std::exchange(conn->pending, QByteArray{});
-                if (!pending.isEmpty())
+                for (const QByteArray &payload : conn->pending)
                     (void)connSend(conn, UDPDatagram(mac, conn->params.host.macAddress,
                         conn->params.hostIPv4, conn->params.deviceIPv4,
-                        conn->params.hostPort, conn->params.devicePort, pending));
+                        conn->params.hostPort, conn->params.devicePort, payload));
+                conn->pending.clear();
             }, Qt::QueuedConnection);
             return {};
         }
@@ -138,7 +141,7 @@ private:
         }
         if (conn->deviceMAC.isNull())
         {
-            conn->pending = payload;
+            conn->pending.push_back(payload);
             Q_EMIT logMessage("对端 MAC 未知，报文已暂存，正在探测");
             return {ARPRequest(conn->params.host.macAddress, conn->params.hostIPv4, conn->params.deviceIPv4), TXRuling::Encode};
         }
@@ -158,7 +161,7 @@ inline std::shared_ptr<PcapConn> PcapHandle::connOpen(const PcapParams &params)
         return {};
     }
     // create 之后立即接管资源；所有失败路径均由同一个删除器释放。
-    auto conn = std::shared_ptr<PcapConn>(new PcapConn{raw, params, params.deviceMAC, {}}, &PcapConn::close);
+    auto conn = std::shared_ptr<PcapConn>(new PcapConn{raw, params, params.deviceMAC}, &PcapConn::close);
     if (pcap_set_snaplen(raw, 65536) != 0 || pcap_set_promisc(raw, 1) != 0 ||
         pcap_set_timeout(raw, static_cast<int>(params.readTimeout.count())) != 0 ||
         pcap_set_buffer_size(raw, params.kernelBufferBytes) != 0 || pcap_activate(raw) < 0)
