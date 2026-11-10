@@ -54,7 +54,36 @@ Q_SIGNALS:
     void logMessage(const QString &text) const final;
 
 private:
-    [[nodiscard]] std::shared_ptr<PcapConn> connOpen(const PcapParams &params) override;
+    [[nodiscard]] std::shared_ptr<PcapConn> connOpen(const PcapParams &params) override
+    {
+        char error[PCAP_ERRBUF_SIZE]{};
+        pcap_t *raw = pcap_create(params.host.pcapDeviceName.toLocal8Bit().constData(), error);
+        if (!raw)
+        {
+            Q_EMIT logMessage(QStringLiteral("网卡打开失败：%1").arg(QString::fromLocal8Bit(error)));
+            return {};
+        }
+        // create 之后立即接管资源；所有失败路径均由同一个删除器释放。
+        auto conn = std::shared_ptr<PcapConn>(new PcapConn{raw, params, params.deviceMAC}, &PcapConn::close);
+        if (pcap_set_snaplen(raw, 65536) != 0 || pcap_set_promisc(raw, 1) != 0 ||
+            pcap_set_timeout(raw, static_cast<int>(params.readTimeout.count())) != 0 ||
+            pcap_set_buffer_size(raw, params.kernelBufferBytes) != 0 || pcap_activate(raw) < 0)
+        {
+            Q_EMIT logMessage(QStringLiteral("网卡配置或激活失败：%1").arg(QString::fromLocal8Bit(pcap_geterr(raw))));
+            return {};
+        }
+        bpf_program program{};
+        if (pcap_compile(raw, &program, buildFilter(params).toLocal8Bit().constData(), 1, PCAP_NETMASK_UNKNOWN) < 0)
+        {
+            Q_EMIT logMessage(QStringLiteral("网卡过滤器编译失败：%1").arg(QString::fromLocal8Bit(pcap_geterr(raw))));
+            return {};
+        }
+        const bool ok = pcap_setfilter(raw, &program) == 0;
+        pcap_freecode(&program);
+        if (!ok)
+            Q_EMIT logMessage(QStringLiteral("网卡过滤器安装失败：%1").arg(QString::fromLocal8Bit(pcap_geterr(raw))));
+        return ok ? conn : nullptr;
+    }
 
     // BPF 筛选接收四元组及本机 ARP；裁决只识别种类。
     [[nodiscard]] static Filter buildFilter(const PcapParams &params)
@@ -151,33 +180,3 @@ private:
     }
 };
 
-inline std::shared_ptr<PcapConn> PcapHandle::connOpen(const PcapParams &params)
-{
-    char error[PCAP_ERRBUF_SIZE]{};
-    pcap_t *raw = pcap_create(params.host.pcapDeviceName.toLocal8Bit().constData(), error);
-    if (!raw)
-    {
-        Q_EMIT logMessage(QStringLiteral("网卡打开失败：%1").arg(QString::fromLocal8Bit(error)));
-        return {};
-    }
-    // create 之后立即接管资源；所有失败路径均由同一个删除器释放。
-    auto conn = std::shared_ptr<PcapConn>(new PcapConn{raw, params, params.deviceMAC}, &PcapConn::close);
-    if (pcap_set_snaplen(raw, 65536) != 0 || pcap_set_promisc(raw, 1) != 0 ||
-        pcap_set_timeout(raw, static_cast<int>(params.readTimeout.count())) != 0 ||
-        pcap_set_buffer_size(raw, params.kernelBufferBytes) != 0 || pcap_activate(raw) < 0)
-    {
-        Q_EMIT logMessage(QStringLiteral("网卡配置或激活失败：%1").arg(QString::fromLocal8Bit(pcap_geterr(raw))));
-        return {};
-    }
-    bpf_program program{};
-    if (pcap_compile(raw, &program, buildFilter(params).toLocal8Bit().constData(), 1, PCAP_NETMASK_UNKNOWN) < 0)
-    {
-        Q_EMIT logMessage(QStringLiteral("网卡过滤器编译失败：%1").arg(QString::fromLocal8Bit(pcap_geterr(raw))));
-        return {};
-    }
-    const bool ok = pcap_setfilter(raw, &program) == 0;
-    pcap_freecode(&program);
-    if (!ok)
-        Q_EMIT logMessage(QStringLiteral("网卡过滤器安装失败：%1").arg(QString::fromLocal8Bit(pcap_geterr(raw))));
-    return ok ? conn : nullptr;
-}
